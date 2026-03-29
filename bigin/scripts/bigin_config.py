@@ -15,7 +15,7 @@ from pathlib import Path
 # Workspace paths
 # ---------------------------------------------------------------------------
 
-WORKSPACE = Path(os.environ.get("OPENCLAW_WORKSPACE_DIR", Path.home() / ".openclaw" / "workspace"))
+WORKSPACE = Path(os.environ.get("OPENCLAW_WORKSPACE", "/data/workspace"))
 SKILL_DIR = WORKSPACE / "skills" / "bigin"
 CONFIG_PATH = SKILL_DIR / "config" / "bigin-config.json"
 STATE_PATH = SKILL_DIR / "state" / "bigin-state.json"
@@ -85,45 +85,51 @@ def save_state(state: dict) -> None:
 # MCP caller
 # ---------------------------------------------------------------------------
 
-def mcporter_call(tool_name: str, arguments: dict, retries: int = 2, timeout: int = 30) -> dict:
+def mcporter_call(server: str, tool: str, retries: int = 2, timeout: int = 25, **params) -> dict | None:
     """
-    Call an MCP tool via the openclaw mcporter subprocess.
-    Returns {"success": True, "data": ...} or {"success": False, "error": "..."}.
-    """
-    payload = json.dumps({"tool": tool_name, "arguments": arguments})
+    Call an MCP tool via mcporter CLI. Matches senpi's exact pattern.
 
-    for attempt in range(retries + 1):
+    Usage:
+        result = mcporter_call("ZohoMCP", "Bigin_searchRecords", module_api_name="Accounts", word="Acme")
+        result = mcporter_call("firecrawl", "firecrawl_scrape", url="https://acme.com")
+
+    Returns parsed response dict, or None on failure.
+    """
+    args = json.dumps(params) if params else "{}"
+    cmd = ["mcporter", "call", server, tool, "--args", args]
+
+    for attempt in range(retries):
         try:
-            result = subprocess.run(
-                ["openclaw", "mcporter", "call"],
-                input=payload,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr.strip() or "non-zero exit")
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if r.returncode != 0:
+                if attempt < retries - 1:
+                    time.sleep(2)
+                    continue
+                return None
 
-            response = json.loads(result.stdout)
+            raw = json.loads(r.stdout)
 
-            # Strip envelope: {content: [{type: "text", text: "..."}]}
-            if "content" in response:
-                for item in response["content"]:
-                    if item.get("type") == "text":
+            # Strip MCP content envelope: {content: [{type: "text", text: "..."}]}
+            if isinstance(raw, dict) and "content" in raw:
+                content = raw["content"]
+                if isinstance(content, list) and content:
+                    first = content[0]
+                    if isinstance(first, dict) and "text" in first:
                         try:
-                            return {"success": True, "data": json.loads(item["text"])}
-                        except json.JSONDecodeError:
-                            return {"success": True, "data": item["text"]}
+                            return json.loads(first["text"])
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            return raw
 
-            return {"success": True, "data": response}
-
-        except Exception as e:
-            if attempt < retries:
-                time.sleep(3)
+        except subprocess.TimeoutExpired:
+            if attempt < retries - 1:
+                time.sleep(2)
                 continue
-            return {"success": False, "error": str(e), "tool": tool_name}
+            return None
+        except Exception:
+            return None
 
-    return {"success": False, "error": "max retries exceeded", "tool": tool_name}
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -133,52 +139,43 @@ def mcporter_call(tool_name: str, arguments: dict, retries: int = 2, timeout: in
 def search_bigin_account(company_name: str, config: dict) -> dict | None:
     """Search Bigin Accounts by name. Returns first match or None."""
     result = mcporter_call(
-        "mcp__ZohoMCP__Bigin_searchRecords",
-        {
-            "module_api_name": config["bigin"]["module"],
-            "word": company_name,
-        },
+        "ZohoMCP", "Bigin_searchRecords",
+        module_api_name=config["bigin"]["module"],
+        word=company_name,
     )
-    if not result["success"]:
+    if not result:
         return None
-    data = result["data"]
-    records = data.get("data", []) if isinstance(data, dict) else []
+    records = result.get("data", []) if isinstance(result, dict) else []
     return records[0] if records else None
 
 
-def update_bigin_account(record_id: str, fields: dict, config: dict) -> dict:
+def update_bigin_account(record_id: str, fields: dict, config: dict) -> dict | None:
     """Update a specific Bigin account record."""
     return mcporter_call(
-        "mcp__ZohoMCP__Bigin_updateSpecificRecord",
-        {
-            "module_api_name": config["bigin"]["module"],
-            "record_id": record_id,
-            "data": fields,
-        },
+        "ZohoMCP", "Bigin_updateSpecificRecord",
+        module_api_name=config["bigin"]["module"],
+        record_id=record_id,
+        data=fields,
     )
 
 
-def create_bigin_account(fields: dict, config: dict) -> dict:
+def create_bigin_account(fields: dict, config: dict) -> dict | None:
     """Create a new Bigin account record."""
     return mcporter_call(
-        "mcp__ZohoMCP__Bigin_addRecords",
-        {
-            "module_api_name": config["bigin"]["module"],
-            "data": [fields],
-        },
+        "ZohoMCP", "Bigin_addRecords",
+        module_api_name=config["bigin"]["module"],
+        data=[fields],
     )
 
 
-def add_research_note(record_id: str, content: str, config: dict) -> dict:
+def add_research_note(record_id: str, content: str, config: dict) -> dict | None:
     """Add a research note to a Bigin record."""
     return mcporter_call(
-        "mcp__ZohoMCP__Bigin_addNotesToSpecificRecord",
-        {
-            "module_api_name": config["bigin"]["module"],
-            "record_id": record_id,
-            "Note_Title": config["bigin"].get("noteTitle", "Company Research Update"),
-            "Note_Content": content,
-        },
+        "ZohoMCP", "Bigin_addNotesToSpecificRecord",
+        module_api_name=config["bigin"]["module"],
+        record_id=record_id,
+        Note_Title=config["bigin"].get("noteTitle", "Company Research Update"),
+        Note_Content=content,
     )
 
 
@@ -186,26 +183,22 @@ def add_research_note(record_id: str, content: str, config: dict) -> dict:
 # Firecrawl helpers
 # ---------------------------------------------------------------------------
 
-def scrape_company_website(url: str, config: dict) -> dict:
+def scrape_company_website(url: str, config: dict) -> dict | None:
     """Scrape a company website and extract structured data."""
     return mcporter_call(
-        "mcp__firecrawl__firecrawl_scrape",
-        {
-            "url": url,
-            "formats": config["firecrawl"].get("scrapeFormats", ["markdown"]),
-            "extract": config["firecrawl"].get("extractFields", {}),
-        },
+        "firecrawl", "firecrawl_scrape",
+        url=url,
+        formats=config["firecrawl"].get("scrapeFormats", ["markdown"]),
+        extract=config["firecrawl"].get("extractFields", {}),
     )
 
 
-def search_company_online(company_name: str, config: dict) -> dict:
+def search_company_online(company_name: str, config: dict) -> dict | None:
     """Search for company info when no website is known."""
     return mcporter_call(
-        "mcp__firecrawl__firecrawl_search",
-        {
-            "query": f"{company_name} company overview employees industry headquarters",
-            "limit": config["firecrawl"].get("searchLimit", 3),
-        },
+        "firecrawl", "firecrawl_search",
+        query=f"{company_name} company overview employees industry headquarters",
+        limit=config["firecrawl"].get("searchLimit", 3),
     )
 
 

@@ -33,6 +33,7 @@ from bigin_config import (
     mcporter_call,
     now_iso,
     out,
+    SKILL_DIR,
 )
 
 
@@ -72,24 +73,22 @@ def research_company(company_name: str, website: str | None, config: dict) -> di
     if website:
         print(f"[INFO] Scraping {website}", file=sys.stderr)
         result = scrape_company_website(website, config)
-        if result["success"]:
-            raw = result["data"]
+        if result and isinstance(result, dict):
             # Firecrawl extract returns data under "extract" key
-            if isinstance(raw, dict):
-                scraped = raw.get("extract", raw)
+            scraped = result.get("extract", result)
 
     if not scraped:
         print(f"[INFO] Web search for {company_name!r}", file=sys.stderr)
         result = search_company_online(company_name, config)
-        if result["success"] and isinstance(result["data"], list):
-            # Combine markdown from top results for context
+        if result and isinstance(result, list):
             combined = "\n\n".join(
                 r.get("markdown", r.get("content", ""))
-                for r in result["data"][:3]
+                for r in result[:3]
                 if isinstance(r, dict)
             )
-            # Best-effort extraction from combined text (LLM will parse)
             scraped = {"_raw_search": combined[:4000]}
+        elif result and isinstance(result, dict):
+            scraped = result.get("data", result)
 
     return scraped
 
@@ -145,11 +144,12 @@ def process_company(company_name: str, website: str | None, record_id: str | Non
     existing = None
     if record_id:
         result = mcporter_call(
-            "mcp__ZohoMCP__Bigin_getSpecificRecord",
-            {"module_api_name": config["bigin"]["module"], "record_id": record_id},
+            "ZohoMCP", "Bigin_getSpecificRecord",
+            module_api_name=config["bigin"]["module"],
+            record_id=record_id,
         )
-        if result["success"]:
-            existing = result["data"].get("data", [None])[0]
+        if result:
+            existing = result.get("data", [None])[0]
     else:
         existing = search_bigin_account(company_name, config)
         if existing:
@@ -188,16 +188,15 @@ def process_company(company_name: str, website: str | None, record_id: str | Non
         fields["Account_Name"] = fields.get("Account_Name", company_name)
         result = create_bigin_account(fields, config)
         action = "created"
-        if result["success"]:
-            created_data = result["data"].get("data", [{}])
+        if result:
+            created_data = result.get("data", [{}])
             record_id = created_data[0].get("details", {}).get("id") if created_data else None
 
-    if not result["success"]:
+    if not result:
         return {
             "status": "error",
             "code": "BIGIN_WRITE_FAILED",
             "company": company_name,
-            "error": result.get("error"),
         }
 
     # 5. Add note
@@ -205,7 +204,7 @@ def process_company(company_name: str, website: str | None, record_id: str | Non
     if config.get("research", {}).get("addNoteOnUpdate", True) and record_id:
         note_content = build_note(company_name, fields, website, config)
         note_result = add_research_note(record_id, note_content, config)
-        note_added = note_result["success"]
+        note_added = note_result is not None
 
     # 6. Update state
     if action == "updated":
@@ -236,17 +235,15 @@ def process_batch(config: dict) -> dict:
 
     # Fetch accounts
     result = mcporter_call(
-        "mcp__ZohoMCP__Bigin_getRecords",
-        {
-            "module_api_name": config["bigin"]["module"],
-            "fields": ",".join(["id", "Account_Name", "Website"] + missing_triggers),
-            "per_page": max_per_run,
-        },
+        "ZohoMCP", "Bigin_getRecords",
+        module_api_name=config["bigin"]["module"],
+        fields=",".join(["id", "Account_Name", "Website"] + missing_triggers),
+        per_page=max_per_run,
     )
-    if not result["success"]:
-        return {"status": "error", "code": "BIGIN_FETCH_FAILED", "error": result.get("error")}
+    if not result:
+        return {"status": "error", "code": "BIGIN_FETCH_FAILED"}
 
-    records = result["data"].get("data", []) if isinstance(result["data"], dict) else []
+    records = result.get("data", []) if isinstance(result, dict) else []
 
     # Filter to accounts missing at least one trigger field
     needs_research = [
