@@ -23,20 +23,22 @@ Packets is a compliance automation platform for fast-growing teams. This reposit
 
 ## Skills
 
-| Skill | Description |
-|-------|-------------|
-| [Bigin Company Research](./Bigin%20Company%20Research.md) | Research companies via web and update records in Zoho Bigin CRM |
+| Skill | Folder | Description |
+|-------|--------|-------------|
+| bigin-research | [bigin-research/](./bigin-research/) | Research companies online and enrich Zoho Bigin Account records |
+| bigin-ops | [bigin-ops/](./bigin-ops/) | Day-to-day CRM operations — notes, tasks, meetings, pipeline stages, contacts, accounts |
 
-## How Skills Work
+## Skill Structure
 
-Each skill is a markdown file that instructs Claude agents on how to perform a specific operational task. Skills define:
+Each skill follows the openclaw/senpi format:
 
-- **When to use** — trigger conditions and applicable scenarios
-- **Prerequisites** — required MCP servers and environment variables
-- **Workflow** — step-by-step process with tool call examples
-- **Field mappings** — how external data maps to tool fields
-- **Examples** — real usage scenarios
-- **Troubleshooting** — common issues and fixes
+```
+<skill-name>/
+├── SKILL.md          # Instructions + YAML frontmatter (triggers, workflow, error codes)
+├── config/           # JSON config (thresholds, field names, defaults)
+├── scripts/          # Python scripts executed by cron or agent
+└── references/       # Reference docs loaded into context as needed
+```
 
 ## MCP Servers Required
 

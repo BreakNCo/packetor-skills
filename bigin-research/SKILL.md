@@ -1,6 +1,6 @@
 ---
-name: bigin-company-research
-description: Research companies using web search and automatically update their details in Zoho Bigin CRM
+name: bigin-research
+description: Research companies using web search and automatically enrich or create their Account records in Zoho Bigin CRM. Use this skill when asked to research a company, enrich CRM data, or bulk-update missing fields like website, employee count, industry, or tech stack.
 version: 1.0.0
 compatibility: openclaw
 tools:

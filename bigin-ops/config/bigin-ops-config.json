@@ -1,0 +1,36 @@
+{
+  "skill": "bigin-ops",
+  "version": "1.0.0",
+
+  "modules": {
+    "accounts": "Accounts",
+    "contacts": "Contacts",
+    "deals": "Pipelines",
+    "tasks": "Tasks",
+    "meetings": "Meetings"
+  },
+
+  "defaults": {
+    "taskStatus": "Not Started",
+    "taskPriority": "Medium",
+    "searchLimit": 10,
+    "listLimit": 20
+  },
+
+  "pipelineStages": [
+    "Qualification",
+    "Needs Analysis",
+    "Value Proposition",
+    "Identify Decision Makers",
+    "Proposal/Price Quote",
+    "Negotiation/Review",
+    "Closed Won",
+    "Closed Lost"
+  ],
+
+  "mcporter": {
+    "server": "ZohoMCP",
+    "retries": 2,
+    "timeoutSeconds": 25
+  }
+}
