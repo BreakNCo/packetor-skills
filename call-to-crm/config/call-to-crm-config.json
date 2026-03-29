@@ -1,0 +1,51 @@
+{
+  "skill": "call-to-crm",
+  "version": "1.0.0",
+
+  "ffmpeg": {
+    "sampleRate": 16000,
+    "channels": 1,
+    "codec": "pcm_s16le",
+    "format": "wav",
+    "chunkDurationSeconds": 600,
+    "chunkOverlapSeconds": 2
+  },
+
+  "whisper": {
+    "model": "whisper-1",
+    "defaultLanguage": null,
+    "temperature": 0
+  },
+
+  "gpt": {
+    "model": "gpt-4o",
+    "temperature": 0.2,
+    "maxTokens": 1000
+  },
+
+  "bigin": {
+    "accountModule": "Accounts",
+    "contactModule": "Contacts",
+    "dealModule": "Pipelines",
+    "taskModule": "Tasks",
+    "noteTitle": "[Call]",
+    "defaultTaskStatus": "Not Started",
+    "defaultTaskPriority": "High",
+    "defaultTaskDueDays": 3,
+    "openDealStages": [
+      "Qualification",
+      "Needs Analysis",
+      "Value Proposition",
+      "Identify Decision Makers",
+      "Proposal/Price Quote",
+      "Negotiation/Review"
+    ]
+  },
+
+  "pipeline": {
+    "maxFileSizeBytes": 26214400,
+    "cleanupTempFiles": true,
+    "tempDir": "/tmp/call-to-crm",
+    "fallbackToRawTranscriptOnSummaryFail": true
+  }
+}

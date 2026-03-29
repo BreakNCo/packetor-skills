@@ -57,6 +57,18 @@ Use `cron.remove` with `{ "name": "JobName" }`.
 
 ## Key Directories
 
-- `OPENCLAW_WORKSPACE_DIR` — workspace root (default: `~/.openclaw/workspace`)
-- `skills/bigin/state/` — Bigin skill state files
+- `OPENCLAW_WORKSPACE` — workspace root (default: `/data/workspace`)
+- `skills/bigin-ops/state/` — Bigin ops state files
+- `skills/call-to-crm/state/` — Call-to-CRM state files
 - `memory/` — session and long-term memory files
+
+## Skills Quick Reference
+
+| Skill | Trigger | Script |
+|-------|---------|--------|
+| `bigin-research` | Research a company online → enrich Bigin | `bigin-research/scripts/bigin-scanner.py` |
+| `bigin-ops` | Add notes/tasks/meetings, move pipeline stage, CRUD contacts/deals | `bigin-ops/scripts/bigin-ops.py` |
+| `audio-transcribe` | Transcribe audio/video file only | `audio-transcribe/scripts/audio-transcribe.py` |
+| `call-to-crm` | **Full pipeline**: audio → transcript → GPT summary → Bigin note + tasks | `call-to-crm/scripts/call-to-crm.py` |
+
+**Use `call-to-crm` as the default for any call recording.** Use `audio-transcribe` only when you need the transcript without CRM updates.
