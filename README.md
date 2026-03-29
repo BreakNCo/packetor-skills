@@ -27,6 +27,7 @@ Packets is a compliance automation platform for fast-growing teams. This reposit
 |-------|--------|-------------|
 | bigin-research | [bigin-research/](./bigin-research/) | Research companies online and enrich Zoho Bigin Account records |
 | bigin-ops | [bigin-ops/](./bigin-ops/) | Day-to-day CRM operations — notes, tasks, meetings, pipeline stages, contacts, accounts |
+| audio-transcribe | [audio-transcribe/](./audio-transcribe/) | Convert audio/video files with ffmpeg and transcribe using OpenAI Whisper |
 
 ## Skill Structure
 

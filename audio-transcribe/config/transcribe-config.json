@@ -1,0 +1,27 @@
+{
+  "skill": "audio-transcribe",
+  "version": "1.0.0",
+
+  "ffmpeg": {
+    "sampleRate": 16000,
+    "channels": 1,
+    "codec": "pcm_s16le",
+    "format": "wav",
+    "chunkDurationSeconds": 600,
+    "chunkOverlapSeconds": 2
+  },
+
+  "whisper": {
+    "model": "whisper-1",
+    "defaultLanguage": null,
+    "defaultFormat": "text",
+    "maxFileSizeBytes": 26214400,
+    "temperature": 0
+  },
+
+  "output": {
+    "defaultFormat": "text",
+    "cleanupTempFiles": true,
+    "tempDir": "/tmp/audio-transcribe"
+  }
+}
