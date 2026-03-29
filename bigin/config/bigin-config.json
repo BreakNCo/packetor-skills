@@ -1,0 +1,64 @@
+{
+  "skill": "bigin-company-research",
+  "version": "1.0.0",
+
+  "bigin": {
+    "module": "Accounts",
+    "searchFields": ["Account_Name", "Website"],
+    "updateFields": [
+      "Account_Name",
+      "Website",
+      "Description",
+      "Industry",
+      "Employees",
+      "Phone",
+      "Twitter",
+      "Billing_City",
+      "Billing_State",
+      "Billing_Country",
+      "Company_Linkedin_Url",
+      "Technologies",
+      "Founded_Year",
+      "Funding_Info",
+      "ISO_Certifications"
+    ],
+    "noteTitle": "Company Research Update"
+  },
+
+  "firecrawl": {
+    "searchLimit": 3,
+    "scrapeFormats": ["markdown"],
+    "extractFields": {
+      "company_name": "Company legal name",
+      "description": "What the company does in 2-3 sentences",
+      "industry": "Primary industry vertical",
+      "employee_count": "Number of employees or range",
+      "founded_year": "Year the company was founded",
+      "headquarters_city": "HQ city",
+      "headquarters_state": "HQ state or region",
+      "headquarters_country": "HQ country",
+      "technologies": "Tech stack or tools used",
+      "linkedin_url": "LinkedIn company page URL",
+      "twitter_url": "Twitter/X handle or URL",
+      "phone": "Main contact phone number",
+      "funding": "Latest funding round or total raised",
+      "iso_certifications": "ISO or compliance certifications"
+    }
+  },
+
+  "research": {
+    "confidenceThreshold": 0.6,
+    "maxRetries": 2,
+    "retryDelaySeconds": 3,
+    "skipFieldsIfPopulated": ["Account_Name", "Website"],
+    "alwaysOverwrite": false,
+    "addNoteOnUpdate": true,
+    "noteSourceTag": "[Auto-Research]"
+  },
+
+  "batch": {
+    "maxPerRun": 20,
+    "missingFieldsTrigger": ["Website", "Employees", "Industry"],
+    "heartbeatIfNoneNeeded": true
+  }
+}

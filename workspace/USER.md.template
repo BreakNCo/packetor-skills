@@ -1,0 +1,21 @@
+# User Profile
+
+## Identity
+Name: {{name}}
+Role: {{role}}
+
+## Notification Preferences
+Channel: {{channel}}  # discord / email / zoho-mail
+Contact: {{contact_id}}  # Discord user ID, email address, etc.
+
+## Working Hours
+Timezone: {{timezone}}  # e.g. Asia/Kolkata
+Active: {{active_hours}}  # e.g. 09:00–19:00 Mon–Fri
+
+## Preferences
+- Language: English
+- Response style: concise
+- Alert threshold: {{alert_threshold}}  # high / medium / low
+
+## Notes
+<!-- Add user-specific notes here -->
