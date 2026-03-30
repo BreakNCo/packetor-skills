@@ -35,13 +35,14 @@ def get_openai_key() -> str:
 
 
 # ---------------------------------------------------------------------------
-# mcporter — ZohoMCP calls
+# mcporter — zoho-bigin calls
 # ---------------------------------------------------------------------------
 
-def mcporter_call(server: str, tool: str, retries: int = 2, timeout: int = 25, **params) -> dict | None:
-    """Call an MCP tool via mcporter CLI."""
+def mcporter_call(tool_name: str, retries: int = 2, timeout: int = 25, **params) -> dict | None:
+    """Call an MCP tool via mcporter CLI using the configured zoho-bigin server."""
     args = json.dumps(params) if params else "{}"
-    cmd = ["mcporter", "call", server, tool, "--args", args]
+    server_tool = f"zoho-bigin.{tool_name}"
+    cmd = ["mcporter", "call", server_tool, "--args", args, "--output", "json"]
 
     for attempt in range(retries):
         try:
@@ -52,15 +53,8 @@ def mcporter_call(server: str, tool: str, retries: int = 2, timeout: int = 25, *
                     continue
                 return None
             raw = json.loads(r.stdout)
-            if isinstance(raw, dict) and "content" in raw:
-                content = raw["content"]
-                if isinstance(content, list) and content:
-                    first = content[0]
-                    if isinstance(first, dict) and "text" in first:
-                        try:
-                            return json.loads(first["text"])
-                        except (json.JSONDecodeError, TypeError):
-                            pass
+            if isinstance(raw, dict) and raw.get("isError"):
+                return None
             return raw
         except subprocess.TimeoutExpired:
             if attempt < retries - 1:
@@ -78,9 +72,9 @@ def mcporter_call(server: str, tool: str, retries: int = 2, timeout: int = 25, *
 
 def find_account(name: str, config: dict) -> dict | None:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_searchRecords",
-        module_api_name=config["bigin"]["accountModule"],
-        word=name,
+        "Bigin_searchRecords",
+        path_variables={"module_api_name": config["bigin"]["accountModule"]},
+        query_params={"word": name},
     )
     if not result:
         return None
@@ -90,13 +84,12 @@ def find_account(name: str, config: dict) -> dict | None:
 
 def find_open_deal(account_id: str, config: dict) -> dict | None:
     """Find the most recent open deal for an account."""
-    open_stages = config["bigin"]["openDealStages"]
     result = mcporter_call(
-        "ZohoMCP", "Bigin_getRecords",
-        module_api_name=config["bigin"]["dealModule"],
-        fields="id,Deal_Name,Stage,Account_Name,Owner",
-        per_page=10,
+        "Bigin_searchRecords",
+        path_variables={"module_api_name": config["bigin"]["dealModule"]},
+        query_params={"word": account_id},
     )
+    open_stages = set(config["bigin"]["openDealStages"])
     if not result:
         return None
     deals = result.get("data", [])
@@ -110,23 +103,23 @@ def find_open_deal(account_id: str, config: dict) -> dict | None:
 
 def update_deal_stage(deal_id: str, stage: str, config: dict) -> bool:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_updateSpecificRecord",
-        module_api_name=config["bigin"]["dealModule"],
-        record_id=deal_id,
-        data={"Stage": stage},
+        "Bigin_updateSpecificRecord",
+        path_variables={
+            "module_api_name": config["bigin"]["dealModule"],
+            "id": deal_id,
+        },
+        body={"data": [{"Stage": stage}]},
     )
-    return result is not None
+    return bool(result and result.get("data"))
 
 
 def add_note_to_record(module: str, record_id: str, title: str, content: str, config: dict) -> bool:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_addNotesToSpecificRecord",
-        module_api_name=module,
-        record_id=record_id,
-        Note_Title=title,
-        Note_Content=content,
+        "Bigin_addNotesToSpecificRecord",
+        path_variables={"module_api_name": module, "id": record_id},
+        body={"data": [{"Note_Title": title, "Note_Content": content}]},
     )
-    return result is not None
+    return bool(result and result.get("data"))
 
 
 def create_task(record_id: str, subject: str, due_date: str, owner: str | None, config: dict) -> str | None:
@@ -140,9 +133,9 @@ def create_task(record_id: str, subject: str, due_date: str, owner: str | None, 
     if owner:
         data["Owner"] = {"email": owner}
     result = mcporter_call(
-        "ZohoMCP", "Bigin_addRecords",
-        module_api_name=config["bigin"]["taskModule"],
-        data=[data],
+        "Bigin_addRecords",
+        path_variables={"module_api_name": config["bigin"]["taskModule"]},
+        body={"data": [data]},
     )
     if not result:
         return None

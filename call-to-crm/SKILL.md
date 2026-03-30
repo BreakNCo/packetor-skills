@@ -1,6 +1,6 @@
 ---
 name: call-to-crm
-description: End-to-end skill: take an audio/video recording of a call or meeting, convert it with ffmpeg, transcribe with OpenAI Whisper, summarise in CRM language with GPT-4o, find the matching Bigin account/deal, update the pipeline stage, add a structured note, and create follow-up tasks for any concrete next actions mentioned. Use this skill when someone shares a call recording, meeting file, or voice note and wants their CRM updated.
+description: End-to-end skill: take an audio/video recording of a call or meeting, convert it with ffmpeg, transcribe with OpenAI Whisper, then hand the transcript to the agent for CRM reasoning and Bigin updates. Use this skill when someone shares a call recording, meeting file, or voice note and wants CRM updated.
 version: 1.0.0
 compatibility: openclaw
 tools:
@@ -9,7 +9,7 @@ tools:
 
 # Call to CRM
 
-Single end-to-end pipeline: audio attachment → ffmpeg conversion → OpenAI Whisper transcription → GPT-4o CRM summary → Bigin account/deal lookup → pipeline update → structured note → follow-up tasks.
+Single end-to-end pipeline: audio attachment → ffmpeg conversion → OpenAI Whisper transcription → agent CRM summary/reasoning → Bigin account/deal lookup → pipeline update → structured note → follow-up tasks.
 
 ## When to Use
 
@@ -30,7 +30,7 @@ Single end-to-end pipeline: audio attachment → ffmpeg conversion → OpenAI Wh
 - `ffmpeg` — `brew install ffmpeg`
 
 **Environment variables:**
-- `OPENAI_API_KEY` — OpenAI API key (Whisper + GPT-4o access)
+- `OPENAI_API_KEY` — OpenAI API key (Whisper/transcription access)
 
 **MCP Server:**
 - `ZohoMCP` — Bigin CRM read/write
@@ -47,7 +47,7 @@ Single end-to-end pipeline: audio attachment → ffmpeg conversion → OpenAI Wh
       ↓
 [3] Whisper → full transcript
       ↓
-[4] GPT-4o → structured CRM summary
+[4] Agent → structured CRM summary
     { account_name, contact_name, summary, stage_change,
       key_points[], action_items[], sentiment }
       ↓
@@ -72,7 +72,7 @@ python3 call-to-crm.py --input meeting.m4a
 # With known deal ID — skip lookup
 python3 call-to-crm.py --input call.mp4 --deal-id "<bigin_deal_id>"
 
-# Dry run — transcribe and summarise, but don't write to Bigin
+# Dry run — transcribe only, no CRM writes
 python3 call-to-crm.py --input call.mp4 --dry-run
 
 # Set task due date offset (days from today)
@@ -84,7 +84,7 @@ python3 call-to-crm.py --input hindi-call.mp4 --language hi
 
 ## CRM Summary Schema
 
-GPT-4o produces this JSON before any Bigin writes:
+The agent should produce this JSON before any Bigin writes:
 
 ```json
 {
@@ -127,6 +127,18 @@ Action Items:
 • Schedule technical demo with CTO (due: 2026-04-03)
 ```
 
+## Agent responsibilities after transcription
+
+The Python script should stop at transcript generation. After that, the agent should:
+
+1. read the transcript output
+2. summarize the call in CRM language
+3. decide account/deal matching strategy
+4. decide stage change only if clearly justified
+5. write notes/tasks to Bigin
+
+This keeps the local runtime simple and avoids embedding GPT summarization logic in Python.
+
 ## Error Handling
 
 All errors return structured JSON. Logs to stderr only.
@@ -138,4 +150,4 @@ Common codes:
 - `ACCOUNT_NOT_FOUND` — no matching Bigin account; note stored but no deal update
 - `DEAL_NOT_FOUND` — account found but no open deal; note added to account
 - `TRANSCRIPTION_FAILED` — Whisper error
-- `SUMMARY_FAILED` — GPT-4o parse error; raw transcript saved as note instead
+- `SUMMARY_FAILED` — agent-side summarization failed after transcription
