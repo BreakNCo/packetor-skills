@@ -57,7 +57,7 @@ Single end-to-end pipeline: audio attachment → ffmpeg conversion → OpenAI Wh
       ↓
 [7] Bigin note → add structured call note
       ↓
-[8] Bigin tasks → create task per action_item (if any)
+[8] Bigin tasks → create follow-up tasks when concrete next actions are present
 ```
 
 ## Script Usage
@@ -74,9 +74,6 @@ python3 call-to-crm.py --input call.mp4 --deal-id "<bigin_deal_id>"
 
 # Dry run — transcribe only, no CRM writes
 python3 call-to-crm.py --input call.mp4 --dry-run
-
-# Set task due date offset (days from today)
-python3 call-to-crm.py --input call.mp4 --account "Acme" --task-due-days 3
 
 # Override language for faster transcription
 python3 call-to-crm.py --input hindi-call.mp4 --language hi
@@ -135,9 +132,22 @@ The Python script should stop at transcript generation. After that, the agent sh
 2. summarize the call in CRM language
 3. decide account/deal matching strategy
 4. decide stage change only if clearly justified
-5. write notes/tasks to Bigin
+5. add a note to the **Pipeline record only** unless explicitly instructed otherwise
+6. create follow-up task(s) only when the conversation contains concrete next actions, commitments, or agreed follow-ups
 
-This keeps the local runtime simple and avoids embedding GPT summarization logic in Python.
+## Task creation rules
+
+Create follow-up tasks when the conversation clearly includes:
+- an agreed next meeting or demo
+- a promise to send material, proposal, pricing, or documents
+- a concrete callback/follow-up request
+- an action that has an obvious owner and realistic next step
+
+Do **not** create tasks for:
+- vague interest
+- generic “we’ll see”
+- exploratory discussion with no commitment
+- weak signals without a real next action
 
 ## Error Handling
 
