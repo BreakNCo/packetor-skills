@@ -265,6 +265,7 @@ def main():
     parser.add_argument("--data")
     parser.add_argument("--include", help="Comma-separated: notes,tasks,meetings")
     parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--raw-json", action="store_true", help="Emit raw underlying API result when available")
     args = parser.parse_args()
 
     include = [x.strip() for x in args.include.split(",")] if args.include else None
@@ -304,7 +305,10 @@ def main():
     else:
         result = {"status": "error", "code": "UNKNOWN_ACTION"}
 
-    out(result)
+    if args.raw_json and isinstance(result, dict) and "result" in result:
+        out(result["result"])
+    else:
+        out(result)
 
 
 if __name__ == "__main__":

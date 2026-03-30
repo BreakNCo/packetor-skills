@@ -10,6 +10,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 WORKSPACE = Path(os.environ.get("OPENCLAW_WORKSPACE", "/data/workspace"))
 SKILL_DIR = WORKSPACE / "packetor-skills" / "bigin-ops"
@@ -68,18 +69,69 @@ def _normalize_params(tool: str, params: dict) -> dict:
     return normalized
 
 
+def _extract_balanced_json(text: str) -> Any:
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = text[start:i + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+def _unwrap_mcporter_content(raw: Any):
+    if isinstance(raw, dict) and "content" in raw:
+        content = raw.get("content")
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, dict) and "text" in first:
+                parsed = _parse_mcporter_output(first["text"])
+                if parsed is not None:
+                    return parsed
+    return raw
+
+
 def _parse_mcporter_output(stdout: str):
     text = (stdout or "").strip()
     if not text:
         return None
 
     try:
-        return json.loads(text)
+        return _unwrap_mcporter_content(json.loads(text))
     except json.JSONDecodeError:
         pass
 
+    extracted = _extract_balanced_json(text)
+    if extracted is not None:
+        return _unwrap_mcporter_content(extracted)
+
     try:
-        return ast.literal_eval(text)
+        return _unwrap_mcporter_content(ast.literal_eval(text))
     except Exception:
         return None
 
@@ -110,15 +162,6 @@ def mcporter_call(server: str, tool: str, retries: int = 2, timeout: int = 25, *
                     time.sleep(1)
                     continue
                 return None
-
-            if isinstance(raw, dict) and "content" in raw:
-                content = raw["content"]
-                if isinstance(content, list) and content:
-                    first = content[0]
-                    if isinstance(first, dict) and "text" in first:
-                        parsed = _parse_mcporter_output(first["text"])
-                        if parsed is not None:
-                            return parsed
             return raw
 
         except subprocess.TimeoutExpired:
