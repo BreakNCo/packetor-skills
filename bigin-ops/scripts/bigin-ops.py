@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
 """
-Bigin CRM Operations v1.0.0
+Bigin CRM Operations v1.1.0
 
 Handles day-to-day CRM interactions: notes, tasks, meetings,
 pipeline stage moves, and contact/account CRUD.
-
-Usage:
-    python3 bigin-ops.py --action add-note    --module Contacts --record-id <id> --title "Title" --content "Body"
-    python3 bigin-ops.py --action fetch-notes --module Contacts --record-id <id>
-    python3 bigin-ops.py --action add-task    --record-id <id> --subject "Follow up" --due "2026-04-05"
-    python3 bigin-ops.py --action fetch-tasks --record-id <id>
-    python3 bigin-ops.py --action add-meeting --record-id <id> --title "Intro call" --start "2026-04-05T10:00:00" --end "2026-04-05T10:30:00"
-    python3 bigin-ops.py --action move-stage  --record-id <id> --stage "Proposal Sent"
-    python3 bigin-ops.py --action fetch       --module Contacts --record-id <id> [--include notes,tasks,meetings]
-    python3 bigin-ops.py --action search      --module Contacts --query "John"
-    python3 bigin-ops.py --action create      --module Contacts --data '{"Last_Name":"Smith","Email":"j@example.com"}'
-    python3 bigin-ops.py --action update      --module Contacts --record-id <id> --data '{"Phone":"+1234567890"}'
-    python3 bigin-ops.py --action list-deals  [--stage "Proposal Sent"] [--limit 20]
 
 Output: JSON to stdout
 Logs:   stderr only
@@ -24,36 +11,30 @@ Logs:   stderr only
 
 import argparse
 import json
-import sys
 
-from bigin_ops_config import (
-    mcporter_call,
-    now_iso,
-    out,
-)
+from bigin_ops_config import mcporter_call, out
 
-# ---------------------------------------------------------------------------
-# Notes
-# ---------------------------------------------------------------------------
+SERVER = "zoho-bigin"
+
 
 def add_note(module: str, record_id: str, title: str, content: str) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_addNotesToSpecificRecord",
-        module_api_name=module,
-        record_id=record_id,
-        Note_Title=title,
-        Note_Content=content,
+        SERVER,
+        "Bigin_addNotesToSpecificRecord",
+        path_variables={"module_api_name": module, "id": record_id},
+        body={"Note_Title": title, "Note_Content": content},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "add-note"}
-    return {"status": "ok", "action": "add-note", "record_id": record_id, "title": title}
+    return {"status": "ok", "action": "add-note", "record_id": record_id, "title": title, "result": result}
 
 
 def fetch_notes(module: str, record_id: str) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_getNotesFromSpecificRecord",
-        module_api_name=module,
-        record_id=record_id,
+        SERVER,
+        "Bigin_getNotesFromSpecificRecord",
+        path_variables={"module_api_name": module, "id": record_id},
+        query_params={},
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "fetch-notes"}
@@ -61,65 +42,64 @@ def fetch_notes(module: str, record_id: str) -> dict:
     return {"status": "ok", "action": "fetch-notes", "count": len(notes), "notes": notes}
 
 
-def update_note(note_id: str, title: str | None, content: str | None) -> dict:
-    data = {}
+def update_note(module: str, record_id: str, note_id: str, title: str | None, content: str | None) -> dict:
+    body = {}
     if title:
-        data["Note_Title"] = title
+        body["Note_Title"] = title
     if content:
-        data["Note_Content"] = content
+        body["Note_Content"] = content
     result = mcporter_call(
-        "ZohoMCP", "Bigin_updateNotes",
-        note_id=note_id,
-        **data,
+        SERVER,
+        "Bigin_updateNotes",
+        path_variables={"module_api_name": module, "id": record_id, "note_id": note_id},
+        body=body,
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "update-note"}
-    return {"status": "ok", "action": "update-note", "note_id": note_id}
+    return {"status": "ok", "action": "update-note", "note_id": note_id, "result": result}
 
 
-def delete_note(note_id: str) -> dict:
+def delete_note(module: str, record_id: str, note_id: str) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_deleteSpecificNote",
-        note_id=note_id,
+        SERVER,
+        "Bigin_deleteSpecificNote",
+        path_variables={"module_api_name": module, "id": record_id, "note_id": note_id},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "delete-note"}
-    return {"status": "ok", "action": "delete-note", "note_id": note_id}
+    return {"status": "ok", "action": "delete-note", "note_id": note_id, "result": result}
 
-
-# ---------------------------------------------------------------------------
-# Tasks
-# ---------------------------------------------------------------------------
 
 def add_task(record_id: str, subject: str, due: str | None, owner: str | None, status: str = "Not Started") -> dict:
-    data: dict = {
+    item = {
         "Subject": subject,
         "Status": status,
         "What_Id": {"id": record_id},
     }
     if due:
-        data["Due_Date"] = due
+        item["Due_Date"] = due
     if owner:
-        data["Owner"] = {"email": owner}
+        item["Owner"] = {"email": owner}
 
     result = mcporter_call(
-        "ZohoMCP", "Bigin_addRecords",
-        module_api_name="Tasks",
-        data=[data],
+        SERVER,
+        "Bigin_addRecords",
+        path_variables={"module_api_name": "Tasks"},
+        body={"data": [item]},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "add-task"}
-    created = result.get("data", [{}])
+    created = result.get("data", [{}]) if isinstance(result, dict) else [{}]
     task_id = created[0].get("details", {}).get("id") if created else None
-    return {"status": "ok", "action": "add-task", "task_id": task_id, "subject": subject}
+    return {"status": "ok", "action": "add-task", "task_id": task_id, "subject": subject, "result": result}
 
 
 def fetch_tasks(record_id: str, module: str = "Contacts") -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_getRelatedListRecords",
-        module_api_name=module,
-        record_id=record_id,
-        related_list_api_name="Tasks",
+        SERVER,
+        "Bigin_getRelatedListRecords",
+        path_variables={"module_api_name": module, "id": record_id, "related_list_api_name": "Tasks"},
+        query_params={},
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "fetch-tasks"}
@@ -127,38 +107,35 @@ def fetch_tasks(record_id: str, module: str = "Contacts") -> dict:
     return {"status": "ok", "action": "fetch-tasks", "count": len(tasks), "tasks": tasks}
 
 
-# ---------------------------------------------------------------------------
-# Meetings
-# ---------------------------------------------------------------------------
-
 def add_meeting(record_id: str, title: str, start: str, end: str, description: str | None = None) -> dict:
-    data: dict = {
+    item = {
         "Event_Title": title,
         "Start_DateTime": start,
         "End_DateTime": end,
         "What_Id": {"id": record_id},
     }
     if description:
-        data["Description"] = description
+        item["Description"] = description
 
     result = mcporter_call(
-        "ZohoMCP", "Bigin_addRecords",
-        module_api_name="Meetings",
-        data=[data],
+        SERVER,
+        "Bigin_addRecords",
+        path_variables={"module_api_name": "Events"},
+        body={"data": [item]},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "add-meeting"}
-    created = result.get("data", [{}])
+    created = result.get("data", [{}]) if isinstance(result, dict) else [{}]
     meeting_id = created[0].get("details", {}).get("id") if created else None
-    return {"status": "ok", "action": "add-meeting", "meeting_id": meeting_id, "title": title}
+    return {"status": "ok", "action": "add-meeting", "meeting_id": meeting_id, "title": title, "result": result}
 
 
 def fetch_meetings(record_id: str, module: str = "Contacts") -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_getRelatedListRecords",
-        module_api_name=module,
-        record_id=record_id,
-        related_list_api_name="Meetings",
+        SERVER,
+        "Bigin_getRelatedListRecords",
+        path_variables={"module_api_name": module, "id": record_id, "related_list_api_name": "Events"},
+        query_params={},
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "fetch-meetings"}
@@ -166,47 +143,43 @@ def fetch_meetings(record_id: str, module: str = "Contacts") -> dict:
     return {"status": "ok", "action": "fetch-meetings", "count": len(meetings), "meetings": meetings}
 
 
-# ---------------------------------------------------------------------------
-# Pipeline / Deals
-# ---------------------------------------------------------------------------
-
 def move_stage(record_id: str, stage: str) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_updateSpecificRecord",
-        module_api_name="Pipelines",
-        record_id=record_id,
-        data={"Stage": stage},
+        SERVER,
+        "Bigin_updateSpecificRecord",
+        path_variables={"module_api_name": "Pipelines", "id": record_id},
+        body={"data": [{"Stage": stage}]},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "move-stage"}
-    return {"status": "ok", "action": "move-stage", "record_id": record_id, "stage": stage}
+    return {"status": "ok", "action": "move-stage", "record_id": record_id, "stage": stage, "result": result}
 
 
 def list_deals(stage: str | None = None, limit: int = 20) -> dict:
-    kwargs: dict = {
-        "module_api_name": "Pipelines",
+    query_params = {
         "per_page": limit,
         "fields": "id,Deal_Name,Stage,Amount,Account_Name,Owner,Closing_Date",
     }
     if stage:
-        kwargs["criteria"] = f"(Stage:equals:{stage})"
+        query_params["criteria"] = f"(Stage:equals:{stage})"
 
-    result = mcporter_call("ZohoMCP", "Bigin_getRecords", **kwargs)
+    result = mcporter_call(
+        SERVER,
+        "Bigin_getRecords",
+        path_variables={"module_api_name": "Pipelines"},
+        query_params=query_params,
+    )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "list-deals"}
     deals = result.get("data", []) if isinstance(result, dict) else []
     return {"status": "ok", "action": "list-deals", "count": len(deals), "deals": deals}
 
 
-# ---------------------------------------------------------------------------
-# Generic record operations
-# ---------------------------------------------------------------------------
-
 def fetch_record(module: str, record_id: str, include: list[str] | None = None) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_getSpecificRecord",
-        module_api_name=module,
-        record_id=record_id,
+        SERVER,
+        "Bigin_getSpecificRecord",
+        path_variables={"module_api_name": module, "id": record_id},
     )
     if not result:
         return {"status": "error", "code": "RECORD_NOT_FOUND", "action": "fetch"}
@@ -230,9 +203,10 @@ def fetch_record(module: str, record_id: str, include: list[str] | None = None) 
 
 def search_records(module: str, query: str) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_searchRecords",
-        module_api_name=module,
-        word=query,
+        SERVER,
+        "Bigin_searchRecords",
+        path_variables={"module_api_name": module},
+        query_params={"word": query},
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "search"}
@@ -242,32 +216,29 @@ def search_records(module: str, query: str) -> dict:
 
 def create_record(module: str, data: dict) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_addRecords",
-        module_api_name=module,
-        data=[data],
+        SERVER,
+        "Bigin_addRecords",
+        path_variables={"module_api_name": module},
+        body={"data": [data]},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "create"}
-    created = result.get("data", [{}])
+    created = result.get("data", [{}]) if isinstance(result, dict) else [{}]
     record_id = created[0].get("details", {}).get("id") if created else None
-    return {"status": "ok", "action": "create", "module": module, "record_id": record_id}
+    return {"status": "ok", "action": "create", "module": module, "record_id": record_id, "result": result}
 
 
 def update_record(module: str, record_id: str, data: dict) -> dict:
     result = mcporter_call(
-        "ZohoMCP", "Bigin_updateSpecificRecord",
-        module_api_name=module,
-        record_id=record_id,
-        data=data,
+        SERVER,
+        "Bigin_updateSpecificRecord",
+        path_variables={"module_api_name": module, "id": record_id},
+        body={"data": [data]},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "update"}
-    return {"status": "ok", "action": "update", "module": module, "record_id": record_id}
+    return {"status": "ok", "action": "update", "module": module, "record_id": record_id, "result": result}
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Bigin CRM Operations")
@@ -307,9 +278,9 @@ def main():
     elif action == "fetch-notes":
         result = fetch_notes(args.module, rid)
     elif action == "update-note":
-        result = update_note(args.note_id, args.title, args.content)
+        result = update_note(args.module, rid, args.note_id, args.title, args.content)
     elif action == "delete-note":
-        result = delete_note(args.note_id)
+        result = delete_note(args.module, rid, args.note_id)
     elif action == "add-task":
         result = add_task(rid, args.subject or "Follow up", args.due, args.owner)
     elif action == "fetch-tasks":

@@ -1,74 +1,51 @@
-# Tools — Packets Agent Cheat Sheet
+# TOOLS.md - Local Notes
 
-Environment-specific notes for each tool. Read this file at session start.
+Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
 
-## MCP Servers
+## What Goes Here
 
-### ZohoMCP
-- **Provides:** Bigin CRM, Zoho Desk, Zoho Mail, Zoho Meeting
-- **Auth:** OAuth credentials configured at setup
-- **Tool prefix:** `mcp__ZohoMCP__Bigin_*`, `mcp__ZohoMCP__Desk_*`, etc.
-- Always use `module_api_name: "Accounts"` for company records in Bigin
-- Always use `module_api_name: "Contacts"` for person records in Bigin
+Things like:
 
-### Firecrawl
-- **Provides:** Web scraping and search
-- **Auth:** `FIRECRAWL_API_KEY` env var
-- **Tool prefix:** `mcp__firecrawl__firecrawl_*`
-- Prefer `firecrawl_scrape` when URL is known; use `firecrawl_search` when it's not
-- Limit search results to 3-5 to control token cost
+- Camera names and locations
+- SSH hosts and aliases
+- Preferred voices for TTS
+- Speaker/room names
+- Device nicknames
+- Anything environment-specific
 
-### mcp-atlassian-azt
-- **Provides:** Jira and Confluence
-- **Auth:** Atlassian API token configured at setup
-- **Tool prefix:** `mcp__mcp-atlassian-azt__jira_*`, `mcp__mcp-atlassian-azt__confluence_*`
-- Use Jira for sprint and ticket management
-- Use Confluence for internal documentation
+## Examples
 
-### context7
-- **Provides:** Up-to-date library and API documentation
-- Use when you need current docs for any tool or framework
+```markdown
+### Cameras
 
-## Cron (OpenClaw Gateway Scheduler)
+- living-room → Main area, 180° wide angle
+- front-door → Entrance, motion-triggered
 
-### Schedule types
-- `"at"` — one-shot: `{ "kind": "at", "at": "2026-02-01T16:00:00Z" }`
-- `"every"` — recurring: `{ "kind": "every", "everyMs": 86400000 }` (ms)
-- `"cron"` — cron expression: `{ "kind": "cron", "expr": "0 9 * * 1-5", "tz": "Asia/Kolkata" }`
+### SSH
 
-### Session targets
-- `"main"` — shared context, use sparingly
-- `"isolated"` — fresh context, cheaper, default for background jobs
+- home-server → 192.168.1.100, user: admin
 
-### Payload format
-```json
-{ "kind": "agentTurn", "message": "Your prompt here" }
+### TTS
+
+- Preferred voice: "Nova" (warm, slightly British)
+- Default speaker: Kitchen HomePod
 ```
 
-### Remove a cron
-Use `cron.remove` with `{ "name": "JobName" }`.
+## Why Separate?
 
-## Shell Tools Available
+Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
 
-- `python3` — for running skill scripts
-- `rg` (ripgrep) — recursive by default, do NOT pass `-R` or `-r`
-- `node -e` — use for JSON processing (no `jq` available)
-- `grep` — fallback search
+---
 
-## Key Directories
+Add whatever helps you do your job. This is your cheat sheet.
 
-- `OPENCLAW_WORKSPACE` — workspace root (default: `/data/workspace`)
-- `skills/bigin-ops/state/` — Bigin ops state files
-- `skills/call-to-crm/state/` — Call-to-CRM state files
-- `memory/` — session and long-term memory files
+## Discord Identity Mapping
 
-## Skills Quick Reference
+Use `/root/.openclaw/workspace/memory/discord-user-mapping.md` as the source of truth when CRM assignee names differ from Discord handles.
 
-| Skill | Trigger | Script |
-|-------|---------|--------|
-| `bigin-research` | Research a company online → enrich Bigin | `bigin-research/scripts/bigin-scanner.py` |
-| `bigin-ops` | Add notes/tasks/meetings, move pipeline stage, CRUD contacts/deals | `bigin-ops/scripts/bigin-ops.py` |
-| `audio-transcribe` | Transcribe audio/video file only | `audio-transcribe/scripts/audio-transcribe.py` |
-| `call-to-crm` | **Full pipeline**: audio → transcript → GPT summary → Bigin note + tasks | `call-to-crm/scripts/call-to-crm.py` |
-
-**Use `call-to-crm` as the default for any call recording.** Use `audio-transcribe` only when you need the transcript without CRM updates.
+Current known mappings:
+- Litti -> litstom (`804603484556623872`)
+- Sebastian / Seb -> sebastiantf (`492207896495521792`)
+- Joko -> Jyothish -> gotenks7414 (`807667955487211550`)
+- Shalini -> shalu0459 (`1337045984764497991`)
+- Santo -> santo237173 (`1336992249472618509`)
