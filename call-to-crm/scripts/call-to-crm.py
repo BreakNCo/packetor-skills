@@ -23,7 +23,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from datetime import date, timedelta
@@ -34,15 +33,11 @@ SKILL_ROOT = SCRIPT_DIR.parent
 WORKSPACE_ROOT = SKILL_ROOT.parent.parent
 VENV_PYTHON = WORKSPACE_ROOT / ".venv" / "bin" / "python"
 
+# Import shared transcription core from audio-transcribe skill
+sys.path.insert(0, str(WORKSPACE_ROOT / "audio-transcribe" / "scripts"))
+from transcribe_core import check_ffmpeg, run_transcription
+
 from call_to_crm_config import load_config, get_openai_key, out
-
-
-# ---------------------------------------------------------------------------
-# Step 1 & 2: Audio conversion via ffmpeg
-# ---------------------------------------------------------------------------
-
-def check_ffmpeg() -> bool:
-    return shutil.which("ffmpeg") is not None
 
 
 def ensure_openai_runtime() -> None:
@@ -59,59 +54,6 @@ def ensure_openai_runtime() -> None:
         env = os.environ.copy()
         env["PACKETOR_CALL_TO_CRM_VENV"] = "1"
         os.execve(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]], env)
-
-
-def convert_audio(input_path: Path, output_path: Path, config: dict) -> None:
-    fc = config["ffmpeg"]
-    cmd = [
-        "ffmpeg", "-y", "-i", str(input_path),
-        "-ar", str(fc["sampleRate"]),
-        "-ac", str(fc["channels"]),
-        "-acodec", fc["codec"],
-        str(output_path),
-    ]
-    print(f"[ffmpeg] Converting {input_path.name}", file=sys.stderr)
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed:\n{r.stderr}")
-
-
-def split_audio(input_path: Path, out_dir: Path, config: dict) -> list[Path]:
-    fc = config["ffmpeg"]
-    segment_time = fc["chunkDurationSeconds"] - fc["chunkOverlapSeconds"]
-    pattern = str(out_dir / "chunk_%03d.wav")
-    cmd = [
-        "ffmpeg", "-y", "-i", str(input_path),
-        "-f", "segment", "-segment_time", str(segment_time),
-        "-ar", str(fc["sampleRate"]), "-ac", str(fc["channels"]),
-        "-acodec", fc["codec"], "-reset_timestamps", "1",
-        pattern,
-    ]
-    print(f"[ffmpeg] Splitting into {segment_time}s chunks", file=sys.stderr)
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"ffmpeg split failed:\n{r.stderr}")
-    chunks = sorted(out_dir.glob("chunk_*.wav"))
-    print(f"[ffmpeg] {len(chunks)} chunks created", file=sys.stderr)
-    return chunks
-
-
-# ---------------------------------------------------------------------------
-# Step 3: Whisper transcription
-# ---------------------------------------------------------------------------
-
-def transcribe(chunks: list[Path], client, config: dict, language: str | None) -> str:
-    wc = config["whisper"]
-    parts = []
-    for chunk in chunks:
-        print(f"[whisper] Transcribing {chunk.name} ({chunk.stat().st_size // 1024}KB)", file=sys.stderr)
-        with open(chunk, "rb") as f:
-            kwargs = dict(model=wc["model"], file=f, response_format="text", temperature=wc["temperature"])
-            if language:
-                kwargs["language"] = language
-            resp = client.audio.transcriptions.create(**kwargs)
-        parts.append(str(resp).strip())
-    return "\n\n".join(p for p in parts if p)
 
 
 # ---------------------------------------------------------------------------
@@ -158,26 +100,18 @@ def run(
     }
 
     try:
-        # ── Step 2: Convert ───────────────────────────────────────────────
-        converted = temp_dir / "converted.wav"
+        # ── Steps 2 & 3: Convert, split, filter, transcribe ──────────────
         try:
-            convert_audio(input_path, converted, config)
+            transcript = run_transcription(
+                input_path=input_path,
+                temp_dir=temp_dir,
+                client=client,
+                config=config,
+                language=language,
+                translate=False,
+                fmt="text",
+            )
             report["steps"]["ffmpeg"] = "ok"
-        except Exception as e:
-            return {"status": "error", "code": "FFMPEG_FAILED", "error": str(e)}
-
-        # ── Split if needed ───────────────────────────────────────────────
-        max_bytes = config["pipeline"]["maxFileSizeBytes"]
-        if converted.stat().st_size > max_bytes:
-            chunks_dir = temp_dir / "chunks"
-            chunks_dir.mkdir()
-            chunks = split_audio(converted, chunks_dir, config)
-        else:
-            chunks = [converted]
-
-        # ── Step 3: Transcribe ────────────────────────────────────────────
-        try:
-            transcript = transcribe(chunks, client, config, language)
             report["steps"]["transcription"] = "ok"
             report["transcript_chars"] = len(transcript)
         except Exception as e:
