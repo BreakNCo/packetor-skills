@@ -22,6 +22,15 @@ import sys
 import tempfile
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILL_ROOT = SCRIPT_DIR.parent
+WORKSPACE_ROOT = SKILL_ROOT.parent.parent
+VENV_PYTHON = WORKSPACE_ROOT / ".venv" / "bin" / "python"
+FFMPEG_CANDIDATES = [
+    WORKSPACE_ROOT / "bin" / "ffmpeg",
+    Path("/data/npm/lib/node_modules/ffmpeg-static/ffmpeg"),
+]
+
 from transcribe_config import load_config, get_openai_key, out
 
 
@@ -29,15 +38,43 @@ from transcribe_config import load_config, get_openai_key, out
 # ffmpeg helpers
 # ---------------------------------------------------------------------------
 
+def resolve_ffmpeg() -> str | None:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+    for candidate in FFMPEG_CANDIDATES:
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 def check_ffmpeg() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return resolve_ffmpeg() is not None
+
+
+def ensure_openai_runtime() -> None:
+    if os.environ.get("PACKETOR_AUDIO_TRANSCRIBE_VENV") == "1":
+        return
+    try:
+        import openai  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    if VENV_PYTHON.exists():
+        env = os.environ.copy()
+        env["PACKETOR_AUDIO_TRANSCRIBE_VENV"] = "1"
+        os.execve(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]], env)
 
 
 def convert_audio(input_path: Path, output_path: Path, config: dict) -> None:
     """Convert any audio/video file to mono WAV at 16kHz using ffmpeg."""
     ffcfg = config["ffmpeg"]
+    ffmpeg_bin = resolve_ffmpeg()
+    if not ffmpeg_bin:
+        raise RuntimeError("ffmpeg binary could not be resolved")
     cmd = [
-        "ffmpeg", "-y",
+        ffmpeg_bin, "-y",
         "-i", str(input_path),
         "-ar", str(ffcfg["sampleRate"]),
         "-ac", str(ffcfg["channels"]),
@@ -56,13 +93,16 @@ def split_audio(input_path: Path, output_dir: Path, config: dict) -> list[Path]:
     Returns list of chunk paths in order.
     """
     ffcfg = config["ffmpeg"]
+    ffmpeg_bin = resolve_ffmpeg()
+    if not ffmpeg_bin:
+        raise RuntimeError("ffmpeg binary could not be resolved")
     duration = ffcfg["chunkDurationSeconds"]
     overlap = ffcfg["chunkOverlapSeconds"]
     segment_time = duration - overlap
 
     pattern = str(output_dir / "chunk_%03d.wav")
     cmd = [
-        "ffmpeg", "-y",
+        ffmpeg_bin, "-y",
         "-i", str(input_path),
         "-f", "segment",
         "-segment_time", str(segment_time),
@@ -155,7 +195,15 @@ def run(
         return {"status": "error", "code": "INPUT_NOT_FOUND", "path": str(input_path)}
 
     if not check_ffmpeg():
-        return {"status": "error", "code": "FFMPEG_NOT_FOUND", "hint": "Install ffmpeg: brew install ffmpeg"}
+        return {
+            "status": "error",
+            "code": "FFMPEG_NOT_FOUND",
+            "hint": (
+                "No ffmpeg found on PATH or in fallback locations. "
+                "Expected one of: /data/workspace/bin/ffmpeg or "
+                "/data/npm/lib/node_modules/ffmpeg-static/ffmpeg"
+            ),
+        }
 
     # OpenAI client
     try:
@@ -167,7 +215,11 @@ def run(
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
     except ImportError:
-        return {"status": "error", "code": "MISSING_DEPENDENCY", "hint": "pip install openai"}
+        return {
+            "status": "error",
+            "code": "MISSING_DEPENDENCY",
+            "hint": f"Install openai in system python or create workspace venv at {VENV_PYTHON}",
+        }
 
     wcfg = config["whisper"]
     ocfg = config["output"]
@@ -181,14 +233,17 @@ def run(
         convert_audio(input_path, converted, config)
 
         file_size = converted.stat().st_size
+        chunk_duration = config["ffmpeg"]["chunkDurationSeconds"]
+        print(
+            f"[INFO] Converted audio size: {file_size // 1024}KB; splitting into {chunk_duration}s chunks",
+            file=sys.stderr,
+        )
 
-        # 2. Split if over limit
-        if file_size > max_bytes:
-            print(f"[INFO] File {file_size // (1024*1024)}MB > limit, splitting", file=sys.stderr)
-            chunks_dir = temp_dir / "chunks"
-            chunks_dir.mkdir()
-            chunks = split_audio(converted, chunks_dir, config)
-        else:
+        # 2. Always split into chunkDurationSeconds-sized chunks before Whisper.
+        chunks_dir = temp_dir / "chunks"
+        chunks_dir.mkdir()
+        chunks = split_audio(converted, chunks_dir, config)
+        if not chunks:
             chunks = [converted]
 
         # 3. Transcribe each chunk
@@ -242,6 +297,7 @@ def run(
 # ---------------------------------------------------------------------------
 
 def main():
+    ensure_openai_runtime()
     parser = argparse.ArgumentParser(description="Audio Transcribe — ffmpeg + OpenAI Whisper")
     parser.add_argument("--input", required=True, help="Input audio/video file path")
     parser.add_argument("--output", help="Output file path (default: stdout)")

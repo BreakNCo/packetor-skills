@@ -8,7 +8,7 @@ tools: []
 
 # Audio Transcribe
 
-Converts audio or video files to a Whisper-compatible format via ffmpeg, then transcribes using the OpenAI Whisper API. Outputs plain text, timestamped SRT, or structured JSON.
+Converts audio or video files to a Whisper-compatible format via ffmpeg, splits them into 1-minute chunks, then transcribes each chunk with the OpenAI Whisper API and merges the results. Outputs plain text, timestamped SRT, or structured JSON.
 
 ## When to Use
 
@@ -41,14 +41,14 @@ The agent runs `audio-transcribe.py`. The script handles all ffmpeg conversion a
 ### 1. Convert with ffmpeg
 Input file is converted to mono 16kHz WAV (optimal for Whisper) using ffmpeg. The original file is never modified.
 
-### 2. Split if needed
-Files over 25MB (Whisper API limit) are automatically split into overlapping chunks using ffmpeg segment.
+### 2. Split into 1-minute chunks
+Every file is split into 60-second chunks using ffmpeg segment before transcription. This keeps requests small and makes long or messy recordings more resilient.
 
 ### 3. Transcribe with Whisper
 Each chunk is sent to `openai.audio.transcriptions.create` with the configured model (`whisper-1`). Timestamps are requested when output format is `srt` or `verbose_json`.
 
 ### 4. Output
-Chunks are merged and written to the output file (or stdout). The temp converted file is cleaned up automatically.
+Chunk transcripts are merged in order and written to the output file (or stdout). The temp converted file is cleaned up automatically.
 
 ## Script Usage
 

@@ -20,8 +20,8 @@ def load_config() -> dict:
             "channels": 1,
             "codec": "pcm_s16le",
             "format": "wav",
-            "chunkDurationSeconds": 600,
-            "chunkOverlapSeconds": 2,
+            "chunkDurationSeconds": 60,
+            "chunkOverlapSeconds": 0,
         },
         "whisper": {
             "model": "whisper-1",
