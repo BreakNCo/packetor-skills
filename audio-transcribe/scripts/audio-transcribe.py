@@ -122,6 +122,39 @@ def split_audio(input_path: Path, output_dir: Path, config: dict) -> list[Path]:
     return chunks
 
 
+def get_mean_volume_db(audio_path: Path) -> float:
+    """
+    Return the mean volume of an audio file in dBFS using ffmpeg volumedetect.
+    Returns a large negative number (e.g. -91.0) on error or silence.
+    """
+    ffmpeg_bin = resolve_ffmpeg()
+    if not ffmpeg_bin:
+        return -91.0
+    cmd = [
+        ffmpeg_bin,
+        "-i", str(audio_path),
+        "-af", "volumedetect",
+        "-vn", "-sn", "-dn",
+        "-f", "null", "/dev/null",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    for line in result.stderr.splitlines():
+        if "mean_volume" in line:
+            # e.g. "  mean_volume: -29.4 dB"
+            try:
+                return float(line.split(":")[1].strip().split()[0])
+            except (IndexError, ValueError):
+                pass
+    return -91.0
+
+
+def is_silent_chunk(audio_path: Path, threshold_db: float = -50.0) -> bool:
+    """Return True if the chunk is effectively silent (mean volume below threshold)."""
+    vol = get_mean_volume_db(audio_path)
+    print(f"[volume] {audio_path.name}: {vol:.1f} dB (threshold {threshold_db} dB)", file=sys.stderr)
+    return vol < threshold_db
+
+
 # ---------------------------------------------------------------------------
 # Whisper helpers
 # ---------------------------------------------------------------------------
@@ -246,9 +279,13 @@ def run(
         if not chunks:
             chunks = [converted]
 
-        # 3. Transcribe each chunk
+        # 3. Transcribe each chunk (skip silent chunks to avoid Whisper hallucinations)
+        silence_threshold_db = config.get("whisper", {}).get("silenceThresholdDb", -50.0)
         parts = []
         for chunk in chunks:
+            if is_silent_chunk(chunk, threshold_db=silence_threshold_db):
+                print(f"[SKIP] {chunk.name} is silent, skipping to avoid hallucination", file=sys.stderr)
+                continue
             try:
                 text = transcribe_file(
                     chunk, client,
@@ -261,7 +298,6 @@ def run(
                 parts.append(text)
             except Exception as e:
                 print(f"[WARN] Chunk {chunk.name} failed: {e}", file=sys.stderr)
-                parts.append("")
 
         # 4. Merge
         transcript = merge_transcripts(parts, fmt)
