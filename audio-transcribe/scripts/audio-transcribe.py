@@ -407,17 +407,18 @@ def run(
         # 4. Merge into the requested output format
         transcript = merge_transcripts(all_segments, fmt, chunk_duration=chunk_duration)
 
-        # 5. Output
-        if output_path:
-            output_path.write_text(transcript, encoding="utf-8")
-            print(f"[INFO] Written to {output_path}", file=sys.stderr)
-        else:
-            print(transcript)
+        # 5. Output — default to <input_stem>.<format_ext> alongside the input file
+        ext_map = {"text": "txt", "srt": "srt", "vtt": "vtt", "verbose_json": "json"}
+        if output_path is None:
+            output_path = input_path.with_suffix("." + ext_map.get(fmt, "txt"))
+
+        output_path.write_text(transcript, encoding="utf-8")
+        print(f"[INFO] Written to {output_path}", file=sys.stderr)
 
         return {
             "status": "ok",
             "input": str(input_path),
-            "output": str(output_path) if output_path else "stdout",
+            "output": str(output_path),
             "format": fmt,
             "chunks": len(chunks),
             "language": language or "auto-detected",
@@ -460,9 +461,7 @@ def main():
         config=config,
     )
 
-    # Only print JSON status on error (transcript already printed in run())
-    if result["status"] != "ok" or args.output:
-        out(result)
+    out(result)
 
 
 if __name__ == "__main__":
