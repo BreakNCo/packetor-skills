@@ -45,30 +45,29 @@ Input file is converted to mono 16kHz WAV (optimal for Whisper) using ffmpeg. Th
 Every file is split into 60-second chunks using ffmpeg segment before transcription. This keeps requests small and makes long or messy recordings more resilient.
 
 ### 3. Transcribe with Whisper
-Each chunk is sent to `openai.audio.transcriptions.create` with the configured model (`whisper-1`). Timestamps are requested when output format is `srt` or `verbose_json`.
+Each chunk is sent to `openai.audio.transcriptions.create` using `verbose_json` internally to get per-segment `no_speech_prob` scores. Segments above the `noSpeechThreshold` (default 0.85) are dropped to prevent hallucinations on silent or low-quality audio.
 
 ### 4. Output
-Chunk transcripts are merged in order and written to the output file (or stdout). The temp converted file is cleaned up automatically.
+Chunk transcripts are merged in order and written automatically to a file alongside the input (e.g. `call.m4a` → `call.txt`). Override with `--output` if needed. Temp files are cleaned up automatically.
 
 ## Script Usage
 
 ```bash
-# Basic transcription to text
-python3 audio-transcribe.py --input meeting.mp4
+# Basic transcription — always pass --language for accuracy
+python3 audio-transcribe.py --input meeting.mp4 --language en
 
-# Save to file
-python3 audio-transcribe.py --input call.m4a --output call.txt
+# Saves automatically to meeting.txt alongside the input file
 
-# SRT subtitles
-python3 audio-transcribe.py --input recording.mp4 --format srt --output recording.srt
+# Override output path
+python3 audio-transcribe.py --input call.m4a --output /path/to/call.txt --language en
 
-# Specify language (faster, more accurate)
-python3 audio-transcribe.py --input audio.mp3 --language en
+# SRT subtitles — saves to recording.srt
+python3 audio-transcribe.py --input recording.mp4 --format srt --language en
 
-# Verbose JSON (includes word-level timestamps)
-python3 audio-transcribe.py --input audio.wav --format verbose_json --output result.json
+# Verbose JSON (includes segment-level timestamps and confidence)
+python3 audio-transcribe.py --input audio.wav --format verbose_json --language en
 
-# Translate to English (from any language)
+# Translate non-English audio to English
 python3 audio-transcribe.py --input french-call.mp4 --translate
 ```
 
@@ -88,6 +87,6 @@ All errors return structured JSON to stdout. Logs go to stderr only.
 Common codes:
 - `FFMPEG_NOT_FOUND` — ffmpeg not installed or not on PATH
 - `INPUT_NOT_FOUND` — input file does not exist
-- `FILE_TOO_LARGE` — file exceeds limit even after conversion (use `--chunk`)
 - `OPENAI_AUTH_FAILED` — invalid or missing `OPENAI_API_KEY`
+- `MISSING_DEPENDENCY` — `openai` Python package not installed (`pip install openai`)
 - `TRANSCRIPTION_FAILED` — Whisper API error, check stderr for details
