@@ -7,14 +7,16 @@
     "channels": 1,
     "codec": "pcm_s16le",
     "format": "wav",
-    "chunkDurationSeconds": 600,
-    "chunkOverlapSeconds": 2
+    "chunkDurationSeconds": 60,
+    "chunkOverlapSeconds": 0
   },
 
   "whisper": {
     "model": "whisper-1",
     "defaultLanguage": null,
-    "temperature": 0
+    "temperature": 0,
+    "silenceThresholdDb": -50.0,
+    "noSpeechThreshold": 0.85
   },
 
   "gpt": {

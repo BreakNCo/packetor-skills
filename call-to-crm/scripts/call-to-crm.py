@@ -34,7 +34,8 @@ WORKSPACE_ROOT = SKILL_ROOT.parent.parent
 VENV_PYTHON = WORKSPACE_ROOT / ".venv" / "bin" / "python"
 
 # Import shared transcription core from audio-transcribe skill
-sys.path.insert(0, str(WORKSPACE_ROOT / "audio-transcribe" / "scripts"))
+# SKILL_ROOT.parent = packetor-skills/, so this works regardless of where the repo is cloned
+sys.path.insert(0, str(SKILL_ROOT.parent / "audio-transcribe" / "scripts"))
 from transcribe_core import check_ffmpeg, run_transcription
 
 from call_to_crm_config import load_config, get_openai_key, out
