@@ -6,6 +6,19 @@ import json
 import os
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    # Walk up from script dir to find .env (skill root, workspace root, etc.)
+    _dir = Path(__file__).resolve().parent
+    for _ in range(4):
+        _env = _dir / ".env"
+        if _env.exists():
+            load_dotenv(_env)
+            break
+        _dir = _dir.parent
+except ImportError:
+    pass
+
 SKILL_DIR = Path(__file__).parent.parent
 CONFIG_PATH = SKILL_DIR / "config" / "transcribe-config.json"
 

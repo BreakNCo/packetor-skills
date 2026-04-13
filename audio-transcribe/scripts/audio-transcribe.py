@@ -159,55 +159,155 @@ def is_silent_chunk(audio_path: Path, threshold_db: float = -50.0) -> bool:
 # Whisper helpers
 # ---------------------------------------------------------------------------
 
-def transcribe_file(
+def transcribe_chunk_verbose(
     audio_path: Path,
     client,
     model: str,
     language: str | None,
-    fmt: str,
     translate: bool,
     temperature: float,
-) -> str:
-    """Send a single file to Whisper API. Returns transcript string."""
+) -> list[dict]:
+    """
+    Transcribe a single chunk using verbose_json to get per-segment no_speech_prob.
+    Returns list of segment dicts (start, end, text, no_speech_prob).
+    """
     print(f"[whisper] Transcribing {audio_path.name} ({audio_path.stat().st_size // 1024}KB)", file=sys.stderr)
-
     with open(audio_path, "rb") as f:
         kwargs = dict(
             model=model,
             file=f,
-            response_format=fmt,
+            response_format="verbose_json",
             temperature=temperature,
+            timestamp_granularities=["segment"],
         )
         if language:
             kwargs["language"] = language
-
         if translate:
             response = client.audio.translations.create(**kwargs)
         else:
             response = client.audio.transcriptions.create(**kwargs)
+    return response.segments or []
 
-    # response is a string for text/srt/vtt, object for verbose_json
+
+def filter_hallucinated_segments(
+    segments: list[dict],
+    no_speech_threshold: float = 0.6,
+) -> list[dict]:
+    """
+    Drop segments where no_speech_prob exceeds the threshold — these are
+    Whisper hallucinations on silence or low-quality audio.
+    """
+    kept, dropped = [], 0
+    for seg in segments:
+        prob = getattr(seg, "no_speech_prob", 0.0)
+        if prob >= no_speech_threshold:
+            print(f"[SKIP] Segment '{getattr(seg, 'text', '').strip()[:40]}' no_speech_prob={prob:.2f}", file=sys.stderr)
+            dropped += 1
+        else:
+            kept.append(seg)
+    if dropped:
+        print(f"[INFO] Dropped {dropped} hallucinated segment(s)", file=sys.stderr)
+    return kept
+
+
+def segments_to_text(segments: list[dict]) -> str:
+    return " ".join(getattr(s, "text", "").strip() for s in segments).strip()
+
+
+def segments_to_srt(segments: list[dict], offset_seconds: float = 0.0) -> str:
+    def fmt_time(t: float) -> str:
+        t += offset_seconds
+        h = int(t // 3600)
+        m = int((t % 3600) // 60)
+        s = int(t % 60)
+        ms = int((t % 1) * 1000)
+        return f"{h:02}:{m:02}:{s:02},{ms:03}"
+
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        start = getattr(seg, "start", 0.0)
+        end = getattr(seg, "end", 0.0)
+        text = getattr(seg, "text", "").strip()
+        lines.append(f"{i}\n{fmt_time(start)} --> {fmt_time(end)}\n{text}")
+    return "\n\n".join(lines)
+
+
+def segments_to_vtt(segments: list[dict], offset_seconds: float = 0.0) -> str:
+    def fmt_time(t: float) -> str:
+        t += offset_seconds
+        h = int(t // 3600)
+        m = int((t % 3600) // 60)
+        s = int(t % 60)
+        ms = int((t % 1) * 1000)
+        return f"{h:02}:{m:02}:{s:02}.{ms:03}"
+
+    lines = ["WEBVTT", ""]
+    for seg in segments:
+        start = getattr(seg, "start", 0.0)
+        end = getattr(seg, "end", 0.0)
+        text = getattr(seg, "text", "").strip()
+        lines.append(f"{fmt_time(start)} --> {fmt_time(end)}\n{text}")
+    return "\n\n".join(lines)
+
+
+def merge_transcripts(all_segments: list[list[dict]], fmt: str, chunk_duration: float) -> str:
+    """
+    Merge segments from all chunks into the requested output format.
+    Timestamps are offset per chunk so they reflect position in the full audio.
+    """
+    import json as _json
+
     if fmt == "verbose_json":
-        import json as _json
-        return _json.dumps(response.model_dump(), indent=2)
-    return str(response)
+        # Flatten with corrected timestamps
+        flat = []
+        for i, segs in enumerate(all_segments):
+            offset = i * chunk_duration
+            for seg in segs:
+                d = seg.__dict__.copy() if hasattr(seg, "__dict__") else dict(seg)
+                d["start"] = d.get("start", 0.0) + offset
+                d["end"] = d.get("end", 0.0) + offset
+                flat.append(d)
+        return _json.dumps({"segments": flat}, indent=2)
 
-
-def merge_transcripts(parts: list[str], fmt: str) -> str:
-    """Merge transcript chunks. For SRT, renumber entries sequentially."""
-    if fmt != "srt":
-        return "\n\n".join(p.strip() for p in parts if p.strip())
-
-    merged = []
-    counter = 1
-    for part in parts:
-        for block in part.strip().split("\n\n"):
-            lines = block.strip().splitlines()
-            if len(lines) >= 2:
-                lines[0] = str(counter)
-                merged.append("\n".join(lines))
+    if fmt == "srt":
+        parts = []
+        counter = 1
+        for i, segs in enumerate(all_segments):
+            offset = i * chunk_duration
+            for seg in segs:
+                def fmt_time(t):
+                    t += offset
+                    h, rem = divmod(t, 3600)
+                    m, s = divmod(rem, 60)
+                    ms = int((s % 1) * 1000)
+                    return f"{int(h):02}:{int(m):02}:{int(s):02},{ms:03}"
+                start = getattr(seg, "start", 0.0)
+                end = getattr(seg, "end", 0.0)
+                text = getattr(seg, "text", "").strip()
+                parts.append(f"{counter}\n{fmt_time(start)} --> {fmt_time(end)}\n{text}")
                 counter += 1
-    return "\n\n".join(merged)
+        return "\n\n".join(parts)
+
+    if fmt == "vtt":
+        lines = ["WEBVTT", ""]
+        for i, segs in enumerate(all_segments):
+            offset = i * chunk_duration
+            for seg in segs:
+                def fmt_time(t):
+                    t += offset
+                    h, rem = divmod(t, 3600)
+                    m, s = divmod(rem, 60)
+                    ms = int((s % 1) * 1000)
+                    return f"{int(h):02}:{int(m):02}:{int(s):02}.{ms:03}"
+                start = getattr(seg, "start", 0.0)
+                end = getattr(seg, "end", 0.0)
+                text = getattr(seg, "text", "").strip()
+                lines.append(f"{fmt_time(start)} --> {fmt_time(end)}\n{text}")
+        return "\n\n".join(lines)
+
+    # Default: plain text
+    parts = [segments_to_text(segs) for segs in all_segments if segs]
+    return "\n\n".join(p for p in parts if p)
 
 
 # ---------------------------------------------------------------------------
@@ -279,28 +379,33 @@ def run(
         if not chunks:
             chunks = [converted]
 
-        # 3. Transcribe each chunk (skip silent chunks to avoid Whisper hallucinations)
-        silence_threshold_db = config.get("whisper", {}).get("silenceThresholdDb", -50.0)
-        parts = []
+        # 3. Transcribe each chunk using verbose_json internally so we can
+        #    filter hallucinated segments by no_speech_prob, regardless of the
+        #    requested output format.
+        silence_threshold_db = wcfg.get("silenceThresholdDb", -50.0)
+        no_speech_threshold = wcfg.get("noSpeechThreshold", 0.6)
+        all_segments = []
         for chunk in chunks:
             if is_silent_chunk(chunk, threshold_db=silence_threshold_db):
                 print(f"[SKIP] {chunk.name} is silent, skipping to avoid hallucination", file=sys.stderr)
+                all_segments.append([])
                 continue
             try:
-                text = transcribe_file(
+                segs = transcribe_chunk_verbose(
                     chunk, client,
                     model=wcfg["model"],
                     language=language,
-                    fmt=fmt,
                     translate=translate,
                     temperature=wcfg["temperature"],
                 )
-                parts.append(text)
+                segs = filter_hallucinated_segments(segs, no_speech_threshold=no_speech_threshold)
+                all_segments.append(segs)
             except Exception as e:
                 print(f"[WARN] Chunk {chunk.name} failed: {e}", file=sys.stderr)
+                all_segments.append([])
 
-        # 4. Merge
-        transcript = merge_transcripts(parts, fmt)
+        # 4. Merge into the requested output format
+        transcript = merge_transcripts(all_segments, fmt, chunk_duration=chunk_duration)
 
         # 5. Output
         if output_path:
