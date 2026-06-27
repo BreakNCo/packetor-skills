@@ -81,20 +81,38 @@ class Handler(BaseHTTPRequestHandler):
             log(f"Bad JSON: {body[:200]}")
             return
 
-        person = payload.get("person") or payload
-        person_id = person.get("id") or payload.get("id")
+        # Apollo phone-reveal webhooks send {"people": [...]} (array at top level).
+        # Legacy single-person payloads use {"person": {...}} or flat {"id": ...}.
+        people_list = payload.get("people")
+        if people_list and isinstance(people_list, list):
+            # Phone-reveal batch callback — store each person separately
+            for person in people_list:
+                person_id = person.get("id")
+                if not person_id:
+                    log("No id in people[i] — skipping entry")
+                    continue
+                results[person_id] = person
+                phones = [
+                    pn.get("sanitized_number") or pn.get("number", "")
+                    for pn in (person.get("phone_numbers") or [])
+                ]
+                log(f"Stored result for {person_id} — phones: {phones or 'none'}")
+        else:
+            # Legacy single-person payload
+            person = payload.get("person") or payload
+            person_id = person.get("id") or payload.get("id")
 
-        if not person_id:
-            log("No person id in payload — discarding")
-            return
+            if not person_id:
+                log("No person id in payload — discarding")
+                return
 
-        results[person_id] = payload
+            results[person_id] = payload
 
-        phones = [
-            pn.get("sanitized_number") or pn.get("number", "")
-            for pn in (person.get("phone_numbers") or [])
-        ]
-        log(f"Stored result for {person_id} — phones: {phones or 'none'}")
+            phones = [
+                pn.get("sanitized_number") or pn.get("number", "")
+                for pn in (person.get("phone_numbers") or [])
+            ]
+            log(f"Stored result for {person_id} — phones: {phones or 'none'}")
 
 
 def main():

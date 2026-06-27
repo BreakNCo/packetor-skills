@@ -245,6 +245,8 @@ mcp__ZohoMCP__Bigin_addNotes(
 
 > **Important:** Always use `mcp__ZohoMCP__Bigin_addNotes` (bulk tool with `data` array + `Parent_Id` + `se_module`). Do NOT use `mcp__ZohoMCP__Bigin_addNotesToSpecificRecord` — it uses a different schema that is incompatible.
 
+> **Updating a note:** `mcp__ZohoMCP__Bigin_updateNotes` requires a `data` wrapper that the tool's schema does not expose, so it always fails with `MANDATORY_NOT_FOUND`. The workaround is: (1) delete the old note with `mcp__ZohoMCP__Bigin_deleteSpecificNote`, then (2) re-add a new one with `mcp__ZohoMCP__Bigin_addNotes`.
+
 #### Mandatory Note Template
 
 ```
@@ -333,80 +335,186 @@ mcp__ZohoMCP__Bigin_addNotes(
 
 ## Step 5 — Apollo Contact Finder (runs every time, fully automatic)
 
-Requires the user's own Apollo API key set in `.env`:
-```
-APOLLO_API_KEY=your-key-here
-```
+Apollo API key is passed by the user as an argument (e.g. `APOLLO_API_KEY=xxx`) or read from `~/.env`.
 
-Run both phases without stopping for approval.
+**All Apollo API calls must use the `X-Api-Key` header — NOT `api_key` in the request body.** The body-key form returns `INVALID_API_KEY_LOCATION` and zero results without an error status code, making it a silent failure.
+
+### Step 5a — Resolve the Apollo Org ID
+
+Apollo's people search by domain name or company name string often returns zero results for small/new companies even when they exist in Apollo. The reliable approach is to search by the Apollo **organization ID** directly.
+
+**If the user provides an Apollo URL** (e.g. `https://app.apollo.io/#/organizations/65699c9de77d770001ea387e`), extract the org ID from the URL hash fragment and fetch the org to confirm:
 
 ```bash
-gooseworks fetch apollo-lead-finder
-# Run apollo-lead-finder with:
-# - q_organization_name: "<company_name>"
-# - job_titles: see priority list below
-# - mode: "standard" (up to 500 enriched contacts)
+APOLLO_ORG_ID="<id_from_url>"
+curl -s "https://api.apollo.io/v1/organizations/$APOLLO_ORG_ID" \
+  -H "X-Api-Key: $APOLLO_API_KEY" \
+  -H "Cache-Control: no-cache"
 ```
+
+**If no Apollo URL is provided**, try to find the org ID via domain search first, but be aware this fails for small companies:
+
+```bash
+# Try 1 — domain search (fails silently for unindexed companies)
+curl -s -X POST "https://api.apollo.io/api/v1/mixed_companies/search" \
+  -H "Content-Type: application/json" \
+  -H "Cache-Control: no-cache" \
+  -H "X-Api-Key: $APOLLO_API_KEY" \
+  -d '{"q_organization_domains": ["<company_domain>"], "per_page": 1}'
+```
+
+If domain search returns no org, **inform the user** that the company was not found in Apollo's search index and ask them to provide the Apollo org URL directly from `app.apollo.io`. Do not attempt name-based search as a fallback — it is equally unreliable for small companies.
+
+### Step 5b — Fetch People by Org ID
+
+Once the org ID is known, use `mixed_people/api_search` with `organization_ids`. This endpoint reaches records that `people/search` and the deprecated `mixed_people/search` cannot find:
+
+```bash
+# Phase 1 — get person IDs (names/emails are masked at this stage)
+curl -s -X POST "https://api.apollo.io/api/v1/mixed_people/api_search" \
+  -H "Content-Type: application/json" \
+  -H "Cache-Control: no-cache" \
+  -H "X-Api-Key: $APOLLO_API_KEY" \
+  -d "{
+    \"organization_ids\": [\"$APOLLO_ORG_ID\"],
+    \"per_page\": 25
+  }"
+```
+
+> **Why not `people/search` or `mixed_people/search`?**
+> - `people/search` with `organization_ids` returns 0 results for small companies.
+> - `mixed_people/search` is deprecated and returns an error directing you to `mixed_people/api_search`.
+> - `mixed_people/api_search` with `organization_ids` is the only endpoint that reliably returns all people for a given org ID.
+
+The response contains person objects with `id` and `title` but **names and emails are masked**. Collect all person IDs for enrichment.
 
 #### Contact Priority Order
 
-Fetch and enrich contacts in this priority order. The goal is to identify decision-makers most likely to own or influence ISO 27001 certification decisions:
+Enrich all contacts found — do not filter before enrichment. After enrichment, group by priority tier in the note:
 
 | Priority | Roles |
 |---|---|
 | 1 — Office / Perfect Contact | Main office number, general enquiries contact, company secretary |
-| 2 — C-Suite | CEO, CTO, COO, Managing Director, General Manager, Founder |
-| 3 — Security / Compliance / IT | CIO, CISO, Compliance Manager, Company Director, GRC Specialist, ISO Specialist, Information Security Manager, Risk Manager, Data Protection Officer |
+| 2 — C-Suite | CEO, CTO, COO, Managing Director, General Manager, Founder, Director |
+| 3 — Security / Compliance / IT | CIO, CISO, Compliance Manager, GRC Specialist, ISO Specialist, Information Security Manager, Risk Manager, Data Protection Officer |
 | 4 — Engineering / Technical | Technical Architect, Director of Engineering, Senior Engineering Manager, VP Engineering, Head of Technology |
-| 5 — Fallback | Receptionist, HR Manager, Business Analyst |
+| 5 — Fallback | Receptionist, HR Manager, Business Analyst, other staff |
 
-When configuring the Apollo search, use these as the `job_titles` filter (in order). Enrich all tiers found — do not stop at the first tier. In the **Key Contacts** section of the note, group contacts by their priority tier and list them in order.
+### Step 5c — Enrich Each Contact via people/match
 
-Phase 1 (search) runs first, then Phase 2 (enrich) runs immediately after — no pause, no approval prompt. After enrichment, insert all contacts into Bigin as Contact records linked to the Account (Step 5b), then include them in the Bigin note under a **Key Contacts** section.
+For every person ID from Phase 1, call `/api/v1/people/match` to reveal name, email, and phone. This is where Apollo credits are consumed (1 credit per call).
 
-**Email and phone enrichment:** The Phase 1 `api_search` does NOT return emails or phone numbers. For every contact from Phase 1, run `apollo_phone_reveal.py` which handles the full async flow:
+> **Critical:** `reveal_phone_number`, `run_waterfall_phone`, and `webhook_url` MUST be **query parameters** in the URL — NOT in the request body. Putting them in the body is silently ignored: Apollo returns person data but never fires the webhook callback. This was confirmed by Apollo's official docs and live testing.
 
 ```bash
-# Read the webhook URL saved during setup
 WEBHOOK_URL=$(cat ~/.apollo_webhook_url)
-APOLLO_API_KEY=$(cat ~/.env | grep APOLLO_API_KEY | cut -d= -f2)
+ENCODED_WEBHOOK_URL=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$WEBHOOK_URL', safe=''))")
 
-python3 /path/to/packetor-skills/bigin-research/scripts/apollo_phone_reveal.py \
-  --api-key "$APOLLO_API_KEY" \
-  --webhook-url "$WEBHOOK_URL" \
-  --person-id "<apollo_id_from_phase1>" \
-  --first-name "<first_name>" \
-  --organization "<company_name>" \
-  --timeout 60 \
-  --poll-interval 3
+curl -s -X POST "https://api.apollo.io/api/v1/people/match?reveal_phone_number=true&run_waterfall_phone=true&webhook_url=${WEBHOOK_URL}" \
+  -H "Content-Type: application/json" \
+  -H "Cache-Control: no-cache" \
+  -H "X-Api-Key: $APOLLO_API_KEY" \
+  -d "{
+    \"id\": \"<person_id>\"
+  }"
 ```
 
-The script outputs a single JSON object:
+A successful phone reveal request returns a `waterfall` field in the response:
 ```json
-{
-  "id": "<apollo_person_id>",
-  "email": "work@company.com",
-  "personal_emails": ["personal@gmail.com"],
-  "phone_numbers": [{"sanitized_number": "+911234567890", "type": "mobile"}],
-  "primary_phone": "+911234567890",
-  "source": "webhook"
-}
+"waterfall": {"status": "accepted", "message": "Waterfall enrichment request accepted. Results will be sent to the provided webhook URL."}
 ```
 
-**How it works:**
-1. Script fires Apollo `/people/match` with `reveal_phone_number: true` and `webhook_url` set to the ngrok URL
-2. Apollo sends the enriched person payload to the webhook server on the ngrok machine
-3. Webhook server writes `~/.apollo_phone_results/<person_id>.json` (shared via the network or the same filesystem if running locally)
-4. Script polls that file path every 3 seconds until it appears (timeout: 60s)
-5. Returns the full result including `phone_numbers[]`
+If `waterfall.status` is `"failed"`, Apollo has no phone data for that contact (no callback will arrive). This is normal for small companies.
+
+The sync response returns `name`, `email`, `email_status`, `linkedin_url`, `city`, `state`, `country`, `seniority`, `departments`. **Phone numbers arrive asynchronously** — Apollo fires a POST to the webhook URL after it completes the reveal (can take 30–120s per contact).
+
+**Run enrichment sequentially** — one contact at a time. Each call costs 1 Apollo credit.
+
+### Step 5d — Poll for Phone Results (blocking, do not skip)
+
+After firing all `people/match` calls, poll the webhook for every contact **until all results arrive or the hard timeout expires**. Do not proceed to Bigin insertion while results are still pending.
+
+```bash
+WEBHOOK_URL=$(cat ~/.apollo_webhook_url)
+HARD_TIMEOUT=300   # 5 minutes total — Apollo can be slow
+POLL_INTERVAL=5    # check every 5 seconds
+
+declare -A pending  # person_id -> 1
+declare -A phones   # person_id -> phone string
+
+for id in <all_person_ids>; do pending[$id]=1; done
+
+elapsed=0
+while [ ${#pending[@]} -gt 0 ] && [ $elapsed -lt $HARD_TIMEOUT ]; do
+  sleep $POLL_INTERVAL
+  elapsed=$((elapsed + POLL_INTERVAL))
+  for id in "${!pending[@]}"; do
+    result=$(curl -s "$WEBHOOK_URL/result/$id")
+    ready=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('ready',False))")
+    if [ "$ready" = "True" ]; then
+      phone=$(echo "$result" | python3 -c "
+import sys, json
+d = json.load(sys.stdin).get('data', {})
+p = d.get('person', d)
+nums = p.get('phone_numbers') or []
+mobile = next((n['sanitized_number'] for n in nums if n.get('type')=='mobile'), None)
+work   = next((n['sanitized_number'] for n in nums if n.get('type')=='work'), None)
+print(mobile or work or '')
+")
+      phones[$id]="$phone"
+      unset pending[$id]
+      echo "Got phone for $id: $phone"
+      # Clean up so the server doesn't accumulate stale results
+      curl -s -X DELETE "$WEBHOOK_URL/result/$id" > /dev/null
+    fi
+  done
+  echo "Waiting... ${#pending[@]} contacts still pending (${elapsed}s elapsed)"
+done
+
+if [ ${#pending[@]} -gt 0 ]; then
+  echo "Timed out waiting for: ${!pending[@]}"
+fi
+```
+
+**Key rules:**
+- **Never time out after just 8–10 seconds.** Apollo phone reveal is async and regularly takes 60–120s per contact. The hard timeout is 5 minutes (300s). Only give up after that.
+- After the poll loop completes (or times out), proceed to Bigin insertion using whatever phone data arrived. Contacts that timed out get inserted without a phone number — do not block or skip them.
+- If the webhook server was restarted between firing `people/match` and polling, the in-memory results will be gone. In this case, re-fire `people/match` for the missing contacts (it uses the same Apollo credits already spent — Apollo will re-send the callback).
 
 **If `~/.apollo_webhook_url` is missing:** Stop and ask the user for the ngrok URL before proceeding. Do not skip phone enrichment.
 
-**If the script times out (source: "timeout"):** The webhook did not fire within 60s. Use `email` and `primary_phone` (org number) from the result anyway, and log `Mobile` as pending. Do not block Bigin insertion.
+**Diagnosing a persistent timeout (all contacts, 2+ minutes):** If zero results arrive after 120s, run this diagnostic before assuming Apollo is slow:
 
-**Run sequentially** — one contact at a time. Each call costs 1 Apollo credit.
+```bash
+# 1. Verify the webhook server is actually storing POSTs (should return ready:true)
+curl -s -X POST "$WEBHOOK_URL/" -H "Content-Type: application/json" \
+  -d '{"person":{"id":"diag_test","phone_numbers":[{"sanitized_number":"+1234","type":"mobile"}]}}'
+sleep 1
+curl -s "$WEBHOOK_URL/result/diag_test"   # expect {"ready":true,...}
+curl -s -X DELETE "$WEBHOOK_URL/result/diag_test" > /dev/null
 
-**Apollo API key location:** Read from `~/.env` or the project `.env` file. The key is the `APOLLO_API_KEY` variable.
+# 2. Check if Apollo actually has phone data (sync call WITHOUT reveal_phone_number)
+curl -s -X POST "https://api.apollo.io/api/v1/people/match" \
+  -H "X-Api-Key: $APOLLO_API_KEY" -H "Content-Type: application/json" \
+  -d "{\"id\":\"<person_id>\",\"reveal_phone_number\":false}" \
+  | python3 -c "import sys,json; p=json.load(sys.stdin).get('person',{}); print('phones:', p.get('phone_numbers'), 'org_phone:', p.get('organization',{}).get('phone',''))"
+```
+
+If step 1 returns `ready:true` but step 2 shows `phone_numbers: None` — **Apollo has no phone data for this contact**. The webhook callback will never arrive because there is nothing to reveal. This is expected for small/new companies. Record the org phone number (`organization.phone`) as `Corporate_Phone` in Bigin if available. If the user saw phone numbers in the Apollo UI, they were sourced from a live enrichment provider that Apollo only exposes via paid plans — the API may not surface the same data.
+
+### Step 5e — Update Bigin Contacts with Phone Numbers
+
+After the poll loop, update any Bigin contact records that received a phone number. Use `mcp__ZohoMCP__Bigin_updateSpecificRecord` for the Contacts module:
+
+```
+mcp__ZohoMCP__Bigin_updateSpecificRecord(
+  module_api_name: "Contacts",
+  id: "<bigin_contact_id>",
+  data: [{ "Mobile": "<sanitized_number>" }]
+)
+```
+
+Run this for every contact where a phone was returned. Then update the research note's Key Contacts section to reflect the phone numbers received (delete old note + re-add with updated content, since `updateNotes` is broken — see Step 4).
 
 ### Step 5b — Insert Apollo Contacts into Bigin
 
