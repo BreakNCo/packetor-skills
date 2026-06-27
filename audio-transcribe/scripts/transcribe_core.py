@@ -155,7 +155,12 @@ def transcribe_chunk_verbose(
 
 
 def filter_hallucinated_segments(segments: list, no_speech_threshold: float = 0.85) -> list:
-    """Drop segments where no_speech_prob exceeds threshold."""
+    """
+    Drop segments where no_speech_prob exceeds threshold, then collapse
+    any repeated short phrase that appears more than 3 times consecutively
+    (e.g. 'Hello? Hello? Hello?...' hallucination from ringtones/bad connections).
+    """
+    # Pass 1: no_speech_prob filter
     kept, dropped = [], 0
     for seg in segments:
         prob = getattr(seg, "no_speech_prob", 0.0)
@@ -169,7 +174,30 @@ def filter_hallucinated_segments(segments: list, no_speech_threshold: float = 0.
             kept.append(seg)
     if dropped:
         print(f"[INFO] Dropped {dropped} hallucinated segment(s)", file=sys.stderr)
-    return kept
+
+    # Pass 2: collapse repeated short phrases (repetition hallucination)
+    # If the same short phrase (<=6 words) repeats consecutively more than 3
+    # times, keep only the first instance. Catches "Hello? Hello? Hello?..." etc.
+    deduped = []
+    i = 0
+    while i < len(kept):
+        seg = kept[i]
+        text = getattr(seg, "text", "").strip()
+        if len(text.split()) <= 6:
+            # Count how many consecutive segments share this text
+            j = i + 1
+            while j < len(kept) and getattr(kept[j], "text", "").strip() == text:
+                j += 1
+            run_len = j - i
+            if run_len > 3:
+                print(f"[DEDUP] '{text}' repeated {run_len}x — keeping 1", file=sys.stderr)
+                deduped.append(seg)
+                i = j
+                continue
+        deduped.append(seg)
+        i += 1
+
+    return deduped
 
 
 def segments_to_text(segments: list) -> str:
