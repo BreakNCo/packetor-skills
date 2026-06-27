@@ -386,7 +386,9 @@ curl -s -X POST "https://api.apollo.io/api/v1/mixed_people/api_search" \
 > - `mixed_people/search` is deprecated and returns an error directing you to `mixed_people/api_search`.
 > - `mixed_people/api_search` with `organization_ids` is the only endpoint that reliably returns all people for a given org ID.
 
-The response contains person objects with `id` and `title` but **names and emails are masked**. Collect all person IDs for enrichment.
+The response contains person objects with `id` and `title` but **names and emails are masked**. Collect all person IDs.
+
+> **Critical — confirm identity before enrichment:** `mixed_people/api_search` returns masked names, so **never assume name-to-ID mapping by position or order**. For each person ID, call `people/match` once WITHOUT `reveal_phone_number` to confirm the real name, title, and email before firing the paid phone reveal. Store the confirmed `{id, name, title, email}` mapping and use it throughout — including when storing webhook results and writing to Bigin. This prevents phones being assigned to the wrong contact, which happened when IDs were assumed to map to names in a certain order but Apollo returned them differently.
 
 #### Contact Priority Order
 
