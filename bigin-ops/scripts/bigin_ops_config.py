@@ -52,7 +52,10 @@ def _normalize_params(tool: str, params: dict) -> dict:
         elif body:
             body = {"data": [body]}
     elif tool in {"Bigin_addNotesToSpecificRecord", "Bigin_updateNotes"}:
-        pass
+        if body and "data" not in body:
+            body = {"data": [body]}
+        elif "data" in body and not isinstance(body["data"], list):
+            body = {"data": [body["data"]]}
     elif tool in {"Bigin_searchRecords", "Bigin_getRecords", "Bigin_getNotesFromSpecificRecord", "Bigin_getRelatedListRecords"}:
         body = {}
     elif tool in {"Bigin_getSpecificRecord", "Bigin_deleteSpecificNote"}:

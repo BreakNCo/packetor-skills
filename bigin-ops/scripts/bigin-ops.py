@@ -22,7 +22,7 @@ def add_note(module: str, record_id: str, title: str, content: str) -> dict:
         SERVER,
         "Bigin_addNotesToSpecificRecord",
         path_variables={"module_api_name": module, "id": record_id},
-        body={"Note_Title": title, "Note_Content": content},
+        body={"data": [{"Note_Title": title, "Note_Content": content}]},
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "add-note"}

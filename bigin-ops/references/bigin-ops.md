@@ -157,8 +157,21 @@ mcporter_call("ZohoMCP", "Bigin_updateSpecificRecord",
 ```python
 mcporter_call("ZohoMCP", "Bigin_addNotesToSpecificRecord",
     module_api_name="Contacts", record_id="<id>",
-    Note_Title="Call summary", Note_Content="Discussed Q2 renewal...")
+    data=[{"Note_Title": "Call summary", "Note_Content": "Discussed Q2 renewal..."}])
 ```
+
+### Add a note to a Pipeline record reliably
+```python
+mcporter_call("ZohoMCP", "Bigin_addNotes",
+    data=[{
+        "Note_Title": "Call summary",
+        "Note_Content": "Discussed next steps...",
+        "Parent_Id": "<pipeline_id>",
+        "se_module": "Pipelines"
+    }])
+```
+
+Note: in this environment, `Bigin_addNotesToSpecificRecord` expects a `body.data` array rather than a flat note body. Pipeline notes are confirmed working when sent either through `Bigin_addNotes` with `Parent_Id + se_module`, or through `Bigin_addNotesToSpecificRecord` with `data=[...]`.
 
 ### Fetch related tasks
 ```python

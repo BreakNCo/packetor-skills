@@ -133,6 +133,8 @@ The Python script should stop at transcript generation. After that, the agent sh
 3. decide account/deal matching strategy
 4. decide stage change only if clearly justified
 5. add a note to the **Pipeline record only** unless explicitly instructed otherwise
+   - for local Zoho Bigin MCP writes, use `Bigin_addNotesToSpecificRecord` with `body={"data":[{"Note_Title": ..., "Note_Content": ...}]}`
+   - if that path is unavailable, use `Bigin_addNotes` with `Parent_Id=<deal_id>` and `se_module="Pipelines"`
 6. create follow-up task(s) only when the conversation contains concrete next actions, commitments, or agreed follow-ups
 
 ## Task creation rules

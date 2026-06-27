@@ -21,6 +21,7 @@ Audio file
 [Bigin] Update pipeline Stage (if stage_change present)
     ▼
 [Bigin] Add structured Note to Deal (fallback: Account)
+    │  Prefer Pipeline-only note writes; use the working MCP note body shape
     ▼
 [Bigin] Create Task per action_item
 ```
@@ -32,6 +33,49 @@ Audio file
 3. If account not found → note is skipped, result contains `account_lookup: not found`
 4. If account found but no open deal → note is added to the Account record
 5. If `--deal-id` is provided, skip lookup entirely
+
+## Note Write Rule
+
+When writing a note to a Pipeline record through the local Zoho Bigin MCP path, use one of these two working patterns:
+
+### Preferred specific-record form
+- tool: `Bigin_addNotesToSpecificRecord`
+- path variables:
+  - `module_api_name = Pipelines`
+  - `id = <deal_id>`
+- body:
+
+```json
+{
+  "data": [
+    {
+      "Note_Title": "...",
+      "Note_Content": "..."
+    }
+  ]
+}
+```
+
+### Reliable fallback form
+- tool: `Bigin_addNotes`
+- body:
+
+```json
+{
+  "data": [
+    {
+      "Note_Title": "...",
+      "Note_Content": "...",
+      "Parent_Id": "<deal_id>",
+      "se_module": "Pipelines"
+    }
+  ]
+}
+```
+
+Important:
+- Do **not** use a flat note body like `{ "Note_Title": "...", "Note_Content": "..." }` for `Bigin_addNotesToSpecificRecord` in this environment.
+- Pipeline note writes are confirmed working when sent with `body.data = [...]`.
 
 ## Stage Change Rules
 
