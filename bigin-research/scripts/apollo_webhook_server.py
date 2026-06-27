@@ -3,8 +3,8 @@
 Apollo phone reveal webhook receiver.
 
 Runs on the ngrok machine. Apollo fires a POST callback here when a phone
-reveal completes. Results are stored in memory and exposed via GET /result/<id>
-so the poller on the work machine can fetch them over the ngrok URL.
+reveal completes. Results are stored in a SQLite database (apollo_results.db
+in the same directory) so they survive server restarts.
 
 Endpoints:
   GET  /              → {"status":"ok"}  (health check)
@@ -13,22 +13,60 @@ Endpoints:
   DELETE /result/<id> → clears a result after it's been consumed
 
 Usage:
-    python3 apollo_webhook_server.py [--port 9055]
+    python3 apollo_webhook_server.py [--port 9055] [--db ./apollo_results.db]
 """
 
 import argparse
 import json
 import re
+import sqlite3
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 
-# In-memory store: person_id -> payload dict
-results: dict = {}
+DB_PATH: str = ""
 
 
 def log(msg: str):
     ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"[{ts}] {msg}", flush=True)
+
+
+def init_db(path: str):
+    con = sqlite3.connect(path)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS results (
+            person_id TEXT PRIMARY KEY,
+            data      TEXT NOT NULL,
+            stored_at TEXT NOT NULL
+        )
+    """)
+    con.commit()
+    con.close()
+
+
+def db_store(person_id: str, data: dict):
+    con = sqlite3.connect(DB_PATH)
+    con.execute(
+        "INSERT OR REPLACE INTO results (person_id, data, stored_at) VALUES (?, ?, ?)",
+        (person_id, json.dumps(data), datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+    con.commit()
+    con.close()
+
+
+def db_get(person_id: str):
+    con = sqlite3.connect(DB_PATH)
+    row = con.execute("SELECT data FROM results WHERE person_id = ?", (person_id,)).fetchone()
+    con.close()
+    return json.loads(row[0]) if row else None
+
+
+def db_delete(person_id: str):
+    con = sqlite3.connect(DB_PATH)
+    con.execute("DELETE FROM results WHERE person_id = ?", (person_id,))
+    con.commit()
+    con.close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -51,8 +89,9 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/result/([^/]+)$", self.path)
         if m:
             person_id = m.group(1)
-            if person_id in results:
-                self.send_json(200, {"ready": True, "data": results[person_id]})
+            data = db_get(person_id)
+            if data is not None:
+                self.send_json(200, {"ready": True, "data": data})
             else:
                 self.send_json(200, {"ready": False})
             return
@@ -60,13 +99,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(404, {"error": "not found"})
 
     def do_DELETE(self):
-        m = re.match(r"^/result/([^/]+)$", self.path)
-        if m:
-            person_id = m.group(1)
-            results.pop(person_id, None)
-            self.send_json(200, {"deleted": True})
-            return
-        self.send_json(404, {"error": "not found"})
+        # Results are never deleted — they persist in SQLite across restarts.
+        # Return 200 so pollers that still issue DELETEs don't break.
+        self.send_json(200, {"deleted": False, "note": "results are persistent, DELETE is a no-op"})
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -91,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not person_id:
                     log("No id in people[i] — skipping entry")
                     continue
-                results[person_id] = person
+                db_store(person_id, person)
                 phones = [
                     pn.get("sanitized_number") or pn.get("number", "")
                     for pn in (person.get("phone_numbers") or [])
@@ -106,7 +141,7 @@ class Handler(BaseHTTPRequestHandler):
                 log("No person id in payload — discarding")
                 return
 
-            results[person_id] = payload
+            db_store(person_id, payload)
 
             phones = [
                 pn.get("sanitized_number") or pn.get("number", "")
@@ -118,9 +153,14 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=9055)
+    parser.add_argument("--db", default=os.path.join(os.path.dirname(__file__), "apollo_results.db"))
     args = parser.parse_args()
 
-    log(f"Apollo webhook server on 0.0.0.0:{args.port}")
+    global DB_PATH
+    DB_PATH = args.db
+
+    init_db(DB_PATH)
+    log(f"Apollo webhook server on 0.0.0.0:{args.port} (db: {DB_PATH})")
     log("Endpoints: GET / (health)  POST / (callback)  GET /result/<id>  DELETE /result/<id>")
     log("Waiting for Apollo callbacks...")
 

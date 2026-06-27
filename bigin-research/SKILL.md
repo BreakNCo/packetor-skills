@@ -464,8 +464,6 @@ print(mobile or work or '')
       phones[$id]="$phone"
       unset pending[$id]
       echo "Got phone for $id: $phone"
-      # Clean up so the server doesn't accumulate stale results
-      curl -s -X DELETE "$WEBHOOK_URL/result/$id" > /dev/null
     fi
   done
   echo "Waiting... ${#pending[@]} contacts still pending (${elapsed}s elapsed)"
@@ -479,7 +477,8 @@ fi
 **Key rules:**
 - **Never time out after just 8–10 seconds.** Apollo phone reveal is async and regularly takes 60–120s per contact. The hard timeout is 5 minutes (300s). Only give up after that.
 - After the poll loop completes (or times out), proceed to Bigin insertion using whatever phone data arrived. Contacts that timed out get inserted without a phone number — do not block or skip them.
-- If the webhook server was restarted between firing `people/match` and polling, the in-memory results will be gone. In this case, re-fire `people/match` for the missing contacts (it uses the same Apollo credits already spent — Apollo will re-send the callback).
+- Results are **persisted in SQLite** (`apollo_results.db` alongside the server script) — they survive server restarts. If the server was restarted mid-run, simply poll again; the results will still be there. Do NOT re-fire `people/match` just because the server restarted.
+- Do NOT issue `DELETE /result/<id>` calls — results are intentionally kept forever as an audit trail.
 
 **If `~/.apollo_webhook_url` is missing:** Stop and ask the user for the ngrok URL before proceeding. Do not skip phone enrichment.
 
@@ -491,7 +490,6 @@ curl -s -X POST "$WEBHOOK_URL/" -H "Content-Type: application/json" \
   -d '{"person":{"id":"diag_test","phone_numbers":[{"sanitized_number":"+1234","type":"mobile"}]}}'
 sleep 1
 curl -s "$WEBHOOK_URL/result/diag_test"   # expect {"ready":true,...}
-curl -s -X DELETE "$WEBHOOK_URL/result/diag_test" > /dev/null
 
 # 2. Check if Apollo actually has phone data (sync call WITHOUT reveal_phone_number)
 curl -s -X POST "https://api.apollo.io/api/v1/people/match" \
