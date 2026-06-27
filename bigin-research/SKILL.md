@@ -392,7 +392,7 @@ The response contains person objects with `id` and `title` but **names and email
 
 #### Contact Priority Order
 
-Enrich all contacts found — do not filter before enrichment. After enrichment, group by priority tier in the note:
+After confirming identities (free `people/match` without reveal), sort all contacts by priority tier before deciding which to enrich:
 
 | Priority | Roles |
 |---|---|
@@ -402,9 +402,22 @@ Enrich all contacts found — do not filter before enrichment. After enrichment,
 | 4 — Engineering / Technical | Technical Architect, Director of Engineering, Senior Engineering Manager, VP Engineering, Head of Technology |
 | 5 — Fallback | Receptionist, HR Manager, Business Analyst, other staff |
 
+#### Enrichment Batching Strategy — minimum 3 phones, credits-efficient
+
+**Goal:** Have at least 3 contacts with phone numbers in Bigin per company.
+
+**Round 1:** Enrich the top 3 contacts by priority tier (highest priority first). Fire `people/match` with phone reveal for those 3 only, then poll for results (Step 5d).
+
+**After Round 1 poll:** Count contacts that received a phone number (`phone_numbers` non-empty in webhook result).
+- If **≥ 3 phones received** → stop enrichment. Insert all available contacts into Bigin (including remaining un-enriched ones without phone data), then proceed to Step 5f.
+- If **< 3 phones received AND more contacts exist** → proceed to Round 2: enrich the next batch of contacts (up to 3 at a time) from the remaining list, in priority order. Repeat until 3 phones are collected or all contacts are exhausted.
+- If **all contacts exhausted and still < 3 phones** → that's fine. Insert all contacts (those without phones get just `Corporate_Phone` set to the org number if available), note it in the research note.
+
+**Key rule:** Never enrich all contacts upfront if there are more than 3. Always start with 3, check results, then continue only if needed. This keeps Apollo credit spend proportional to the result.
+
 ### Step 5c — Enrich Each Contact via people/match
 
-For every person ID from Phase 1, call `/api/v1/people/match` to reveal name, email, and phone. This is where Apollo credits are consumed (1 credit per call).
+For each contact in the current enrichment batch (up to 3 per round), call `/api/v1/people/match` to reveal name, email, and phone. This is where Apollo credits are consumed (1 credit per call).
 
 > **Critical:** `reveal_phone_number`, `run_waterfall_phone`, and `webhook_url` MUST be **query parameters** in the URL — NOT in the request body. Putting them in the body is silently ignored: Apollo returns person data but never fires the webhook callback. This was confirmed by Apollo's official docs and live testing.
 
@@ -432,9 +445,11 @@ The sync response returns `name`, `email`, `email_status`, `linkedin_url`, `city
 
 **Run enrichment sequentially** — one contact at a time. Each call costs 1 Apollo credit.
 
-### Step 5d — Poll for Phone Results (blocking, do not skip)
+### Step 5d — Poll for Phone Results (blocking, do not skip, MUST run before contact insertion)
 
-After firing all `people/match` calls, poll the webhook for every contact **until all results arrive or the hard timeout expires**. Do not proceed to Bigin insertion while results are still pending.
+> **Critical ordering:** Poll MUST complete before inserting contacts into Bigin (Step 5b). Never insert contacts and then poll — phones will be missed. If the context was interrupted or compacted between enrichment and insertion, always poll first even if enrichment was fired in a prior session — results persist in SQLite and will still be there.
+
+After firing all `people/match` calls in the current batch, poll the webhook for every contact in that batch **until all results arrive or the hard timeout expires**.
 
 ```bash
 WEBHOOK_URL=$(cat ~/.apollo_webhook_url)
@@ -516,7 +531,42 @@ mcp__ZohoMCP__Bigin_updateSpecificRecord(
 
 Run this for every contact where a phone was returned. Then update the research note's Key Contacts section to reflect the phone numbers received (delete old note + re-add with updated content, since `updateNotes` is broken — see Step 4).
 
-### Step 5b — Insert Apollo Contacts into Bigin
+### Step 5f — Link Pipeline Record to Best Contact (mandatory, always run)
+
+After contacts are inserted/updated, find the company's Pipeline record and set `Contact_Name` to the best available contact. This eliminates the manual linking step.
+
+**Priority order for best contact** (pick the highest available):
+1. CEO, Co-founder, Founder, Managing Director
+2. CTO, COO, Director, General Manager
+3. Head of / VP of any function
+4. Any other contact (pick the one with the most complete data — email + phone preferred)
+
+```
+# 1. Find the pipeline record
+mcp__ZohoMCP__Bigin_searchRecords(
+  module_api_name: "Pipelines",
+  word: "<company_name_keyword>"
+)
+
+# 2. Update it with the best contact's Bigin ID
+mcp__ZohoMCP__Bigin_updateSpecificRecord(
+  module_api_name: "Pipelines",
+  id: "<pipeline_id>",
+  data: [{
+    "Deal_Name": "<pipeline_deal_name>",
+    "Stage": "<current_stage>",
+    "Sub_Pipeline": "<current_sub_pipeline>",
+    "Contact_Name": { "id": "<best_contact_bigin_id>", "name": "<contact_full_name>" }
+  }]
+)
+```
+
+**Rules:**
+- `Deal_Name`, `Stage`, and `Sub_Pipeline` are required fields — always carry them forward from the existing record, never blank them.
+- If no contacts exist for the company (Apollo returned 0 results), skip this step and note it in the research note.
+- If there are multiple contacts at the same priority tier, prefer the one with a confirmed email over one without.
+
+### Step 5g — Insert Apollo Contacts into Bigin
 
 For each enriched contact returned by Apollo Phase 2, create a Contact record in Bigin linked to the Account. Use `mcp__ZohoMCP__Bigin_addRecords` for the Contacts module:
 
