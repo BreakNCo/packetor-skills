@@ -65,6 +65,11 @@ Preferred mapping:
 
 Always verify the file ID from the Notion table before sending.
 
+Important finding:
+- For files already attached to a Bigin company/account record, prefer the raw `getAttachments` API `$file_id` over record attachment `id` and over older unstable uploaded-file IDs.
+- `sendEmails.attachments[].id` works with the attachment `$file_id` returned by the raw attachments API.
+- Record attachment `id` alone does not work for `sendEmails.attachments[].id`.
+
 ## Exact Notion parsing instructions
 
 For the current page structure:

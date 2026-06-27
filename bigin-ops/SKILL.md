@@ -75,6 +75,7 @@ See `references/bigin-ops.md` for full field names, pipeline stage values, and t
 - **Fetch** → `Bigin_getSpecificRecord`
 - **Create** → `Bigin_addRecords`
 - **Update** → `Bigin_updateSpecificRecord`
+- If direct search returns empty for a likely existing company, retry with partial-name/fuzzy search terms (for example first word, split words, or geography like Kerala) and compare strong near matches before writing.
 
 ## Script Usage
 
@@ -102,3 +103,8 @@ Common codes:
 - `RECORD_NOT_FOUND` — no matching record in Bigin
 - `INVALID_STAGE` — stage name not valid for this pipeline
 - `WRITE_FAILED` — CRM update failed, check field names in `references/bigin-ops.md`
+
+Operational findings:
+- Some MCP search calls can return empty responses even when matching records exist.
+- In those cases, use broader/fuzzy search queries and compare likely results carefully before updating CRM.
+- Confirmed working note write-back endpoint shape for a specific record: `Bigin_addNotesToSpecificRecord(body: {data: [{Note_Title, Note_Content}]}, path_variables: {module_api_name, id})`.

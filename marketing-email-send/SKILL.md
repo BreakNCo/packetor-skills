@@ -59,6 +59,7 @@ Parse the page in this order:
 5. Treat column 1 as the file name and column 2 as the Bigin file ID.
 6. Match the chosen template family to its attachment file name.
 7. If multiple similar rows exist, prefer the latest corrected row or the row whose file ID has already been proven in a successful send.
+8. Prefer rows updated from raw Bigin attachment `$file_id` values over older uploaded-file IDs when both exist.
 
 On this page, look for:
 - the content blocks containing the template families
