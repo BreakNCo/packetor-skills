@@ -175,6 +175,28 @@ Note: in this environment, `Bigin_addNotesToSpecificRecord` expects a `body.data
 
 Important: do not trust a stale pipeline id copied from an older message or another workspace. Before writing a Pipeline note or Pipeline-linked task, re-search the deal by company/deal name and use the current returned `id`, unless the id was just fetched in the same execution flow.
 
+### Create a Pipeline-linked task (exact working pattern)
+```python
+mcporter_call("ZohoMCP", "Bigin_addRecords",
+    module_api_name="Tasks",
+    data=[{
+        "Subject": "Follow up",
+        "$related_module": "Deals",
+        "Related_To": {"id": "<pipeline_id>", "name": "<deal_name>"},
+        "Priority": "High",
+        "Status": "Not Started",
+        "Description": "Concrete next step from the call"
+    }])
+```
+
+Important:
+- Before creating a Pipeline-linked task, re-search the current deal/pipeline record and use the returned `id`.
+- In this setup, the reliable linkage pattern is:
+  - `$related_module: "Deals"`
+  - `Related_To: { id, name }`
+- Do not rely on stale ids copied from old notes/messages.
+- Prefer this pattern over older `What_Id` / `$se_module` assumptions for pipeline-linked tasks in this environment.
+
 ### Fetch related tasks
 ```python
 mcporter_call("ZohoMCP", "Bigin_getRelatedListRecords",
