@@ -173,6 +173,8 @@ mcporter_call("ZohoMCP", "Bigin_addNotes",
 
 Note: in this environment, `Bigin_addNotesToSpecificRecord` expects a `body.data` array rather than a flat note body. Pipeline notes are confirmed working when sent either through `Bigin_addNotes` with `Parent_Id + se_module`, or through `Bigin_addNotesToSpecificRecord` with `data=[...]`.
 
+Important: do not trust a stale pipeline id copied from an older message or another workspace. Before writing a Pipeline note or Pipeline-linked task, re-search the deal by company/deal name and use the current returned `id`, unless the id was just fetched in the same execution flow.
+
 ### Fetch related tasks
 ```python
 mcporter_call("ZohoMCP", "Bigin_getRelatedListRecords",

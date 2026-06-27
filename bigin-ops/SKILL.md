@@ -53,6 +53,7 @@ See `references/bigin-ops.md` for full field names, pipeline stage values, and t
 - **Fetch notes** → `Bigin_getNotesFromSpecificRecord`
 - **Update note** → `Bigin_updateNotes`
 - **Delete note** → `Bigin_deleteSpecificNote`
+- Before writing a note to a Pipeline record, re-search and verify the current pipeline/deal record unless the id was just fetched in the same flow.
 
 ### Tasks
 - **Create task** → `Bigin_addRecords` on `Tasks` module

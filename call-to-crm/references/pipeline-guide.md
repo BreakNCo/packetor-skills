@@ -33,6 +33,7 @@ Audio file
 3. If account not found → note is skipped, result contains `account_lookup: not found`
 4. If account found but no open deal → note is added to the Account record
 5. If `--deal-id` is provided, skip lookup entirely
+6. If a deal id came from an older note, chat message, or another workspace, do not trust it blindly — re-search the current Pipeline record before writing notes or tasks.
 
 ## Note Write Rule
 
