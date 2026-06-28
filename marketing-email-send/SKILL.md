@@ -52,11 +52,29 @@ Use the page:
 
 ### How to fetch from Notion
 
-1. Authenticate with `NOTION_API_KEY` or `~/.config/notion/api_key`.
-2. Fetch page metadata from `/v1/pages/{page_id}`.
-3. Fetch top-level page content from `/v1/blocks/{page_id}/children?page_size=100`.
-4. For any block with `has_children: true`, fetch nested content from `/v1/blocks/{block_id}/children?page_size=100`.
-5. Extract template text from block types like headings, paragraphs, callouts, list items, and toggles using `rich_text` / `plain_text`.
+#### Auth
+1. Use `NOTION_API_KEY` if present.
+2. If not present, fall back to `~/.config/notion/api_key`.
+3. Send headers:
+   - `Authorization: Bearer <token>`
+   - `Notion-Version: 2025-09-03`
+
+#### Page lookup
+4. Resolve the target page ID (for example the `Mail-content-for-Companies` page ID).
+5. Fetch page metadata from `/v1/pages/{page_id}` to confirm title and freshness.
+
+#### Block traversal
+6. Fetch top-level page content from `/v1/blocks/{page_id}/children?page_size=100`.
+7. For any block with `has_children: true`, fetch nested content from `/v1/blocks/{block_id}/children?page_size=100`.
+8. Traverse recursively as needed for toggles, headings, and nested sections.
+
+#### Text extraction
+9. Extract template text from block types like headings, paragraphs, callouts, list items, and toggles using `rich_text` / `plain_text`.
+10. Keep structure while extracting so section labels and code prefixes remain associated with the right body copy.
+
+#### Database handling
+11. If a relevant block is a `child_database`, treat it as a database-backed source rather than a plain block table.
+12. Query database rows/properties using database APIs instead of assuming inline table rows.
 
 ### Current structure of this page
 
