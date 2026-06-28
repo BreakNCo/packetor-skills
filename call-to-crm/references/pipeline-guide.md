@@ -24,7 +24,7 @@ Audio file
     │  Prefer Pipeline-only note writes; use the working MCP note body shape
     ▼
 [Bigin] Create Task per action_item
-    │  Use Pipeline-linked task creation with `$related_module="Deals"` and `Related_To={id,name}`
+    │  Use Pipeline-linked task creation with `What_Id={id}` and `$se_module="Deals"`
 ```
 
 ## Account & Deal Lookup Logic

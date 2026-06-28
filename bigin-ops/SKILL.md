@@ -59,7 +59,7 @@ See `references/bigin-ops.md` for full field names, pipeline stage values, and t
 - **Create task** → `Bigin_addRecords` on `Tasks` module
 - **Fetch tasks** → `Bigin_getRelatedListRecords` with `related_list_api_name: "Tasks"`
 - **Update task** → `Bigin_updateSpecificRecord` on `Tasks`
-- For Pipeline-linked tasks, use the exact working linkage pattern: `$related_module: "Deals"` plus `Related_To: { id, name }` using a freshly verified pipeline/deal id.
+- For Pipeline-linked tasks, use the exact working linkage pattern: `What_Id: { id }` plus `$se_module: "Deals"` using a freshly verified pipeline/deal id.
 - Always set a `Due_Date` when creating tasks.
 
 ### Meetings
@@ -88,7 +88,7 @@ Use `bigin-ops.py` for structured, multi-step operations:
 python3 bigin-ops.py --action add-note --module Contacts --record-id <id> --title "Call notes" --content "Discussed pricing..."
 
 # Create a Pipeline-linked task
-python3 bigin-ops.py --action add-task --record-id <pipeline_id> --deal-name "Acme Corp" --subject "Follow up" --due "2026-04-05" --owner "joseph@packets.build"
+python3 bigin-ops.py --action add-task --record-id <pipeline_id> --subject "Follow up" --due "2026-04-05" --owner "joseph@packets.build"
 
 # Move deal stage
 python3 bigin-ops.py --action move-stage --record-id <id> --stage "Proposal Sent"

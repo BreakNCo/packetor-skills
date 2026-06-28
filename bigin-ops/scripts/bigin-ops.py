@@ -83,8 +83,8 @@ def add_task(record_id: str, subject: str, due: str | None, owner: str | None, s
     item = {
         "Subject": subject,
         "Status": status,
-        "$related_module": "Deals",
-        "Related_To": {"id": record_id, "name": deal_name or record_id},
+        "What_Id": {"id": record_id},
+        "$se_module": "Deals",
         "Priority": "High",
     }
     if due:

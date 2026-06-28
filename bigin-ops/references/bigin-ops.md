@@ -181,10 +181,11 @@ mcporter_call("ZohoMCP", "Bigin_addRecords",
     module_api_name="Tasks",
     data=[{
         "Subject": "Follow up",
-        "$related_module": "Deals",
-        "Related_To": {"id": "<pipeline_id>", "name": "<deal_name>"},
+        "What_Id": {"id": "<pipeline_id>"},
+        "$se_module": "Deals",
         "Priority": "High",
         "Status": "Not Started",
+        "Due_Date": "2026-04-05",
         "Description": "Concrete next step from the call"
     }])
 ```
@@ -192,10 +193,9 @@ mcporter_call("ZohoMCP", "Bigin_addRecords",
 Important:
 - Before creating a Pipeline-linked task, re-search the current deal/pipeline record and use the returned `id`.
 - In this setup, the reliable linkage pattern is:
-  - `$related_module: "Deals"`
-  - `Related_To: { id, name }`
+  - `What_Id: { id }`
+  - `$se_module: "Deals"`
 - Do not rely on stale ids copied from old notes/messages.
-- Prefer this pattern over older `What_Id` / `$se_module` assumptions for pipeline-linked tasks in this environment.
 - Always set a `Due_Date`.
 
 ### Due date rule
