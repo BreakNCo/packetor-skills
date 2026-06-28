@@ -86,8 +86,8 @@ Use `bigin-ops.py` for structured, multi-step operations:
 # Add a note
 python3 bigin-ops.py --action add-note --module Contacts --record-id <id> --title "Call notes" --content "Discussed pricing..."
 
-# Create a task
-python3 bigin-ops.py --action add-task --record-id <id> --subject "Follow up" --due "2026-04-05" --owner "joseph@packets.build"
+# Create a Pipeline-linked task
+python3 bigin-ops.py --action add-task --record-id <pipeline_id> --deal-name "Acme Corp" --subject "Follow up" --due "2026-04-05" --owner "joseph@packets.build"
 
 # Move deal stage
 python3 bigin-ops.py --action move-stage --record-id <id> --stage "Proposal Sent"

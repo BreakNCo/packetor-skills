@@ -17,6 +17,15 @@ from bigin_ops_config import mcporter_call, out
 SERVER = "zoho-bigin"
 
 
+def _rows(result: dict | None):
+    if not isinstance(result, dict):
+        return []
+    data = result.get("data", [])
+    if isinstance(data, dict) and "data" in data:
+        data = data["data"]
+    return data if isinstance(data, list) else []
+
+
 def add_note(module: str, record_id: str, title: str, content: str) -> dict:
     result = mcporter_call(
         SERVER,
@@ -38,7 +47,7 @@ def fetch_notes(module: str, record_id: str) -> dict:
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "fetch-notes"}
-    notes = result.get("data", []) if isinstance(result, dict) else []
+    notes = _rows(result)
     return {"status": "ok", "action": "fetch-notes", "count": len(notes), "notes": notes}
 
 
@@ -70,11 +79,13 @@ def delete_note(module: str, record_id: str, note_id: str) -> dict:
     return {"status": "ok", "action": "delete-note", "note_id": note_id, "result": result}
 
 
-def add_task(record_id: str, subject: str, due: str | None, owner: str | None, status: str = "Not Started") -> dict:
+def add_task(record_id: str, subject: str, due: str | None, owner: str | None, status: str = "Not Started", deal_name: str | None = None) -> dict:
     item = {
         "Subject": subject,
         "Status": status,
-        "What_Id": {"id": record_id},
+        "$related_module": "Deals",
+        "Related_To": {"id": record_id, "name": deal_name or record_id},
+        "Priority": "High",
     }
     if due:
         item["Due_Date"] = due
@@ -89,7 +100,7 @@ def add_task(record_id: str, subject: str, due: str | None, owner: str | None, s
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "add-task"}
-    created = result.get("data", [{}]) if isinstance(result, dict) else [{}]
+    created = _rows(result)
     task_id = created[0].get("details", {}).get("id") if created else None
     return {"status": "ok", "action": "add-task", "task_id": task_id, "subject": subject, "result": result}
 
@@ -103,7 +114,7 @@ def fetch_tasks(record_id: str, module: str = "Contacts") -> dict:
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "fetch-tasks"}
-    tasks = result.get("data", []) if isinstance(result, dict) else []
+    tasks = _rows(result)
     return {"status": "ok", "action": "fetch-tasks", "count": len(tasks), "tasks": tasks}
 
 
@@ -125,7 +136,7 @@ def add_meeting(record_id: str, title: str, start: str, end: str, description: s
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "add-meeting"}
-    created = result.get("data", [{}]) if isinstance(result, dict) else [{}]
+    created = _rows(result)
     meeting_id = created[0].get("details", {}).get("id") if created else None
     return {"status": "ok", "action": "add-meeting", "meeting_id": meeting_id, "title": title, "result": result}
 
@@ -139,7 +150,7 @@ def fetch_meetings(record_id: str, module: str = "Contacts") -> dict:
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "fetch-meetings"}
-    meetings = result.get("data", []) if isinstance(result, dict) else []
+    meetings = _rows(result)
     return {"status": "ok", "action": "fetch-meetings", "count": len(meetings), "meetings": meetings}
 
 
@@ -171,7 +182,7 @@ def list_deals(stage: str | None = None, limit: int = 20) -> dict:
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "list-deals"}
-    deals = result.get("data", []) if isinstance(result, dict) else []
+    deals = _rows(result)
     return {"status": "ok", "action": "list-deals", "count": len(deals), "deals": deals}
 
 
@@ -184,7 +195,8 @@ def fetch_record(module: str, record_id: str, include: list[str] | None = None) 
     if not result:
         return {"status": "error", "code": "RECORD_NOT_FOUND", "action": "fetch"}
 
-    record = result.get("data", [{}])[0] if isinstance(result, dict) else {}
+    rows = _rows(result)
+    record = rows[0] if rows else {}
     response: dict = {"status": "ok", "action": "fetch", "record": record}
 
     if include:
@@ -210,7 +222,7 @@ def search_records(module: str, query: str) -> dict:
     )
     if not result:
         return {"status": "error", "code": "FETCH_FAILED", "action": "search"}
-    records = result.get("data", []) if isinstance(result, dict) else []
+    records = _rows(result)
     return {"status": "ok", "action": "search", "module": module, "count": len(records), "records": records}
 
 
@@ -223,7 +235,7 @@ def create_record(module: str, data: dict) -> dict:
     )
     if not result:
         return {"status": "error", "code": "WRITE_FAILED", "action": "create"}
-    created = result.get("data", [{}]) if isinstance(result, dict) else [{}]
+    created = _rows(result)
     record_id = created[0].get("details", {}).get("id") if created else None
     return {"status": "ok", "action": "create", "module": module, "record_id": record_id, "result": result}
 
@@ -257,6 +269,7 @@ def main():
     parser.add_argument("--subject")
     parser.add_argument("--due")
     parser.add_argument("--owner")
+    parser.add_argument("--deal-name")
     parser.add_argument("--start")
     parser.add_argument("--end")
     parser.add_argument("--description")
@@ -283,7 +296,7 @@ def main():
     elif action == "delete-note":
         result = delete_note(args.module, rid, args.note_id)
     elif action == "add-task":
-        result = add_task(rid, args.subject or "Follow up", args.due, args.owner)
+        result = add_task(rid, args.subject or "Follow up", args.due, args.owner, deal_name=args.deal_name)
     elif action == "fetch-tasks":
         result = fetch_tasks(rid, args.module)
     elif action == "add-meeting":
