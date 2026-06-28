@@ -50,20 +50,31 @@ Prefer reading the live Notion table first. If needed, use these current mapping
 Use the page:
 - `Mail-content-for-Companies`
 
+### How to fetch from Notion
+
+1. Authenticate with `NOTION_API_KEY` or `~/.config/notion/api_key`.
+2. Fetch page metadata from `/v1/pages/{page_id}`.
+3. Fetch top-level page content from `/v1/blocks/{page_id}/children?page_size=100`.
+4. For any block with `has_children: true`, fetch nested content from `/v1/blocks/{block_id}/children?page_size=100`.
+5. Extract template text from block types like headings, paragraphs, callouts, list items, and toggles using `rich_text` / `plain_text`.
+
+### Current structure of this page
+
 Parse the page in this order:
 
 1. Read top-level child blocks of the page.
 2. Find the section containing the mail template families.
 3. Find the heading exactly named `Uploaded Bigin Files`.
-4. Read the table block immediately under that heading.
-5. Treat column 1 as the file name and column 2 as the Bigin file ID.
-6. Match the chosen template family to its attachment file name.
-7. If multiple similar rows exist, prefer the latest corrected row or the row whose file ID has already been proven in a successful send.
-8. Prefer rows updated from raw Bigin attachment `$file_id` values over older uploaded-file IDs when both exist.
+4. Inspect the block immediately under that heading.
+5. If it is a table, parse column 1 as file name and column 2 as Bigin file ID.
+6. If it is a `child_database`, treat that database as the attachment source of truth and fetch its rows/properties via database APIs.
+7. Match the chosen template family to its attachment file name.
+8. If multiple similar rows exist, prefer the latest corrected row or the row whose file ID has already been proven in a successful send.
+9. Prefer rows updated from raw Bigin attachment `$file_id` values over older uploaded-file IDs when both exist.
 
 On this page, look for:
 - the content blocks containing the template families
-- the table headed `Uploaded Bigin Files`
+- the attachment source under `Uploaded Bigin Files` (table or child database)
 
 ## Notes and summary behavior
 
