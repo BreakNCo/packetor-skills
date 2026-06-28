@@ -35,10 +35,13 @@ Typical inputs:
    - non-India + certified + enterprise/mid-market + in-house -> in-house
 10. Read the exact template copy from Notion.
 11. Choose the matching attachment from the `Uploaded Bigin Files` table.
-12. If notes exist, fill placeholders with recipient/company facts and customize lightly using the summary.
-13. If notes do not exist, use the original Notion template copy with only normal recipient/company placeholder filling and no internal/debug wording.
-14. Build the send payload.
-15. Send via Bigin.
+12. Resolve the exact Bigin file id from that table before building the send payload.
+13. If notes exist, fill placeholders with recipient/company facts and customize lightly using the summary.
+14. If notes do not exist, use the original Notion template copy with only normal recipient/company placeholder filling and no internal/debug wording.
+15. Build a human-review package before any send.
+16. Wait for explicit human approval.
+17. Build the send payload.
+18. Send via Bigin only after approval.
 
 ## Suggested subject line patterns
 
@@ -85,6 +88,7 @@ For the current page structure:
 7. For template text, continue scanning the other page blocks for the relevant template family sections and variants.
 8. If notes are absent, use the exact template body from Notion as the fallback email body.
 9. If notes are present, use the Notion template as the base and customize lightly.
+10. Resolve the chosen attachment filename to the live Bigin file id from the table before sending.
 
 ## Summary guidance
 
@@ -141,6 +145,31 @@ Prioritize these signals in the summary:
 - reasons a more tailored opening or CTA would help
 
 Keep summaries concise and useful for the next outbound step.
+
+## Human review package requirements
+
+Before sending any individual or bulk email, present:
+
+- recipient name
+- recipient email
+- company name
+- linked pipeline/deal id when relevant
+- chosen template group and template family
+- attachment filename
+- resolved Bigin file id
+- subject line
+- full final email body
+- explanation of why this template was selected
+- explanation of what customization was added from CRM context or company facts
+
+Then ask for explicit confirmation before sending.
+
+Examples of acceptable confirmation:
+- "send"
+- "send now"
+- "approved, send"
+
+Without explicit approval, do not send.
 
 ## Failure handling
 

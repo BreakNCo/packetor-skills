@@ -10,14 +10,47 @@ Use this skill to select and send the right outbound email from Bigin.
 ## Workflow
 
 1. Fetch the target contact, linked pipeline/deal record if relevant, and company/account details from Bigin.
+   - Prefer using the `bigin-ops` skill patterns/scripts for CRM reads and writes against Bigin.
 2. Fetch notes from both the pipeline record and the company/account record.
 3. Merge the notes into one timeline, sort newest first, and produce a concise summary of the current context.
 4. Write that summary back as a note on the pipeline record.
 5. Read the Notion page for mail-content templates.
 6. Apply the routing rules below to choose the right template family.
 7. Read the `Uploaded Bigin Files` table on the same Notion page and map the chosen template family to the correct Bigin file ID.
+   - Treat this table as mandatory source-of-truth for attachment ids in normal operation.
+   - Do not skip this lookup when sending live or test emails if the table is available.
 8. Use the summary plus recipient/company facts to personalize the subject/body.
-9. Send through `zoho-bigin.Bigin_sendEmails` with the chosen attachment ID.
+9. Present a full human-review package before any send.
+10. Only send through `zoho-bigin.Bigin_sendEmails` after explicit human confirmation.
+
+## Bigin operation rule
+
+- For CRM operations in this skill, prefer the established `bigin-ops` pathways for:
+  - contact fetch/search
+  - account fetch/search
+  - pipeline/deal fetch/search
+  - note write-back to pipeline
+  - task reads when needed
+- Reuse the exact working Bigin/MCP payload patterns already documented in `bigin-ops` rather than inventing separate CRM shapes here.
+
+## Mandatory human review before send
+
+- Never send an individual or bulk email immediately after draft generation.
+- Before any send, present a human-review package that includes:
+  - recipient name
+  - recipient email
+  - company/account name
+  - linked pipeline/deal id when relevant
+  - chosen template group and template family
+  - attachment filename and resolved Bigin file id
+  - subject line
+  - full final email body
+  - clear explanation of why that template was chosen
+  - clear summary of any customizations made from CRM notes/company facts
+- For bulk sends, provide the same review structure per recipient or as a structured batch preview.
+- After presenting the review package, ask for explicit confirmation.
+- Only send after a clear human approval such as “send”, “send now”, or equivalent explicit confirmation.
+- If approval is ambiguous or partial, do not send.
 
 ## Template routing rules
 
@@ -93,6 +126,13 @@ Parse the page in this order:
 On this page, look for:
 - the content blocks containing the template families
 - the attachment source under `Uploaded Bigin Files` (table or child database)
+
+## Attachment id rule
+
+- Before sending, always fetch the attachment id from the `Uploaded Bigin Files` table on the same Notion page when that table is available.
+- Use the chosen template family to select the attachment filename first, then resolve the exact Bigin file id from the table.
+- Only fall back to hardcoded mappings if the Notion table is temporarily unavailable.
+- When testing, still use the live table id unless the user explicitly asks for a no-attachment test.
 
 ## Notes and summary behavior
 
