@@ -58,11 +58,50 @@ Top-level blocks include:
 If the block under a relevant heading (for example `Uploaded Bigin Files`) is a `child_database`:
 - do not treat it as plain text
 - identify its block/database object id
-- query the database rows
+- fetch database metadata first
+- inspect the returned `data_sources` array
+- when present, prefer querying the backing data source rows
 - extract row properties such as:
   - file name
   - Bigin file id
   - other metadata columns
+
+## Database and data source retrieval rule
+
+Use this sequence for child databases and structured tables:
+
+1. `GET /v1/databases/{database_id}`
+   - confirm the database title
+   - inspect `data_sources`
+2. If `data_sources` is present, capture the backing `data_source_id`
+3. Query rows using:
+   - `POST /v1/data_sources/{data_source_id}/query`
+4. Use an explicit JSON request body (an empty object `{}` is valid)
+5. If you need to reduce properties, pass `filter_properties` in the **query string**, not in the JSON body
+
+Important findings from this environment:
+- `GET /v1/databases/{database_id}` works and returns `data_sources`
+- `POST /v1/data_sources/{data_source_id}/query` works when called with the proper semantics
+- `filter_properties` belongs in the URL query string, for example:
+
+```http
+POST /v1/data_sources/{data_source_id}/query?filter_properties[]=title
+```
+
+- using invalid `filter_properties` values returns a validation error
+- when a full-row query is needed, omit `filter_properties` and map all returned properties
+
+## Row extraction rule
+
+When rows are returned from a data source query:
+- preserve the property/header names exactly
+- extract the corresponding values by property type
+- for `title` and `rich_text`, flatten `plain_text`
+- build a header -> value map for each row
+
+Example from the `attachments` source:
+- `File name` -> `Customers_already_certified.pdf`
+- `Bigin file ID` -> `3m0rq41620ce5dc97439d9310bd8f489a5f22`
 
 ## Extraction rule
 
