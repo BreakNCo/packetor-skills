@@ -38,6 +38,7 @@ Typical inputs:
 12. Resolve the exact Bigin file id from that table before building the send payload.
 13. If notes exist, fill placeholders with recipient/company facts and customize lightly using the summary.
 14. If notes do not exist, use the original Notion template copy with only normal recipient/company placeholder filling and no internal/debug wording.
+14.1. Do not automatically add body lines such as "This is a test outbound email from Packets" or "This is a test follow-up from Packets" unless the human explicitly asks for that wording.
 15. Build a human-review package before any send.
 16. Wait for explicit human approval.
 17. Build the send payload.

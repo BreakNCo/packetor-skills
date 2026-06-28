@@ -154,7 +154,8 @@ On this page, look for:
 ## Sender behavior
 
 - Prefer the configured sender the user specifies.
-- If testing, make it explicit in the subject/body that the email is a test.
+- If testing, do not automatically inject phrases like "This is a test outbound email" or "This is a test follow-up" into the email body.
+- If a visible test marker is needed, prefer using the subject line or the human-review package rather than forcing test wording into the body.
 - Keep personalization light and factual unless the user asks for stronger customization.
 - When summary context exists, customize the email with proper recipient/company details and only add claims supported by CRM notes or known company facts.
 
