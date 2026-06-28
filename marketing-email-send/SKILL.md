@@ -15,6 +15,7 @@ Use this skill to select and send the right outbound email from Bigin.
 3. Merge the notes into one timeline, sort newest first, and produce a concise summary of the current context.
 4. Write that summary back as a note on the pipeline record.
 5. Read the Notion page for mail-content templates.
+   - Use the `notion` skill for all Notion-side interactions.
 6. Apply the routing rules below to choose the right template family.
 7. Read the `Uploaded Bigin Files` table on the same Notion page and map the chosen template family to the correct Bigin file ID.
    - Treat this table as mandatory source-of-truth for attachment ids in normal operation.
@@ -82,6 +83,11 @@ Prefer reading the live Notion table first. If needed, use these current mapping
 
 Use the page:
 - `Mail-content-for-Companies`
+
+For all Notion interactions in this skill:
+- use the `notion` skill
+- follow the direct API + recursive block traversal + child-database query approach documented there
+- do not invent separate Notion fetch logic inside this skill
 
 ### How to fetch from Notion
 
