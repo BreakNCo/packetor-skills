@@ -196,6 +196,19 @@ Important:
   - `Related_To: { id, name }`
 - Do not rely on stale ids copied from old notes/messages.
 - Prefer this pattern over older `What_Id` / `$se_module` assumptions for pipeline-linked tasks in this environment.
+- Always set a `Due_Date`.
+
+### Due date rule
+Use the earliest sensible due date based on what the call clearly implies:
+
+- **Explicit date/day mentioned** → convert that into the actual due date and use it.
+- **Email / send details / send deck / send proposal** with no explicit date → set due date to **next day**.
+- **Tomorrow / next day callback** → set due date to **next day**.
+- **This week meeting / schedule this week** → set due date to the **next business day**, or the explicit day if one is named.
+- **Next week follow-up / next Tuesday / Wednesday to Friday plan** → set due date to the earliest day that fits the instruction.
+- **No timing signal but still a concrete task** → default to **next business day**.
+
+If the exact date cannot be resolved perfectly, prefer a practical near-term due date rather than leaving it blank.
 
 ### Fetch related tasks
 ```python

@@ -95,10 +95,22 @@ Examples that do NOT trigger a stage change:
 ## Action Items Detection
 
 GPT-4o extracts action_items only for **concrete, named next steps**:
-- ✅ "Send the proposal by Thursday" → task: "Send proposal", due_days: 2
-- ✅ "Book a technical demo with the CTO" → task: "Book technical demo with CTO", due_days: 5
+- ✅ "Send the proposal by Thursday" → task: "Send proposal", due date = Thursday
+- ✅ "Book a technical demo with the CTO" → task: "Book technical demo with CTO", due date = earliest practical meeting date
 - ❌ "We'll follow up" → too vague, not extracted
 - ❌ "Let's keep in touch" → not an action item
+
+## Due Date Rules
+
+Every created task should have a due date.
+
+Use these defaults when the transcript does not give an exact date:
+- send email / send details / send deck / send proposal → next day
+- callback tomorrow / next day → next day
+- this week meeting / schedule this week → next business day
+- next week follow-up → earliest practical day next week
+- explicit weekday mentioned → use that weekday
+- no timing but still clearly actionable → next business day
 
 ## Dry Run Mode
 

@@ -60,6 +60,7 @@ See `references/bigin-ops.md` for full field names, pipeline stage values, and t
 - **Fetch tasks** → `Bigin_getRelatedListRecords` with `related_list_api_name: "Tasks"`
 - **Update task** → `Bigin_updateSpecificRecord` on `Tasks`
 - For Pipeline-linked tasks, use the exact working linkage pattern: `$related_module: "Deals"` plus `Related_To: { id, name }` using a freshly verified pipeline/deal id.
+- Always set a `Due_Date` when creating tasks.
 
 ### Meetings
 - **Create meeting** → `Bigin_addRecords` on `Meetings` module

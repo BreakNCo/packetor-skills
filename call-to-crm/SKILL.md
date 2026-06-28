@@ -137,6 +137,11 @@ The Python script should stop at transcript generation. After that, the agent sh
    - for local Zoho Bigin MCP writes, use `Bigin_addNotesToSpecificRecord` with `body={"data":[{"Note_Title": ..., "Note_Content": ...}]}`
    - if that path is unavailable, use `Bigin_addNotes` with `Parent_Id=<deal_id>` and `se_module="Pipelines"`
 7. create follow-up task(s) only when the conversation contains concrete next actions, commitments, or agreed follow-ups
+8. always assign a due date to created tasks
+   - explicit date/day mentioned → use that
+   - send email/details/deck/proposal with no date → next day
+   - meeting/callback this week → next business day or earliest named day
+   - next week follow-up → earliest practical day next week
 
 ## Task creation rules
 
