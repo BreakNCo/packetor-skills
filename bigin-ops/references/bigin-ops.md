@@ -175,6 +175,32 @@ Note: in this environment, `Bigin_addNotesToSpecificRecord` expects a `body.data
 
 Important: do not trust a stale pipeline id copied from an older message or another workspace. Before writing a Pipeline note or Pipeline-linked task, re-search the deal by company/deal name and use the current returned `id`, unless the id was just fetched in the same execution flow.
 
+### Exact pipeline id extraction command
+
+In this environment, if the pretty-printed search output obscures the top-level deal id, use this exact command to extract the current Pipeline/Deal `id` directly:
+
+```bash
+mcporter --config /data/workspace-discord-ops/config/mcporter.json call zoho-bigin.Bigin_searchRecords \
+  'path_variables={"module_api_name":"Pipelines"}' \
+  'query_params={"word":"<company or deal name>"}' \
+| python3 -c 'import sys,json; obj=json.load(sys.stdin); print(obj["data"]["data"][0]["id"])'
+```
+
+Example:
+
+```bash
+mcporter --config /data/workspace-discord-ops/config/mcporter.json call zoho-bigin.Bigin_searchRecords \
+  'path_variables={"module_api_name":"Pipelines"}' \
+  'query_params={"word":"Orivios Technologies Private Limited"}' \
+| python3 -c 'import sys,json; obj=json.load(sys.stdin); print(obj["data"]["data"][0]["id"])'
+```
+
+This returned:
+
+```text
+1188539000000665129
+```
+
 ### Create a Pipeline-linked task (exact working pattern)
 ```python
 mcporter_call("ZohoMCP", "Bigin_addRecords",
@@ -192,6 +218,7 @@ mcporter_call("ZohoMCP", "Bigin_addRecords",
 
 Important:
 - Before creating a Pipeline-linked task, re-search the current deal/pipeline record and use the returned `id`.
+- Prefer the exact pipeline-id extraction command above when the visible pretty output does not show the top-level `id` clearly.
 - In this setup, the reliable linkage pattern is:
   - `What_Id: { id }`
   - `$se_module: "Deals"`

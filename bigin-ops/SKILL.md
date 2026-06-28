@@ -60,6 +60,7 @@ See `references/bigin-ops.md` for full field names, pipeline stage values, and t
 - **Fetch tasks** → `Bigin_getRelatedListRecords` with `related_list_api_name: "Tasks"`
 - **Update task** → `Bigin_updateSpecificRecord` on `Tasks`
 - For Pipeline-linked tasks, use the exact working linkage pattern: `What_Id: { id }` plus `$se_module: "Deals"` using a freshly verified pipeline/deal id.
+- In this environment, the most reliable way to fetch the current Pipeline/Deal id is the exact `Bigin_searchRecords ... | python3 -c '...print(obj["data"]["data"][0]["id"])'` extraction pattern documented in `references/bigin-ops.md`.
 - Always set a `Due_Date` when creating tasks.
 
 ### Meetings

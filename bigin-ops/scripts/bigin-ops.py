@@ -80,6 +80,9 @@ def delete_note(module: str, record_id: str, note_id: str) -> dict:
 
 
 def add_task(record_id: str, subject: str, due: str | None, owner: str | None, status: str = "Not Started", deal_name: str | None = None) -> dict:
+    if not due:
+        return {"status": "error", "code": "DUE_DATE_REQUIRED", "action": "add-task"}
+
     item = {
         "Subject": subject,
         "Status": status,
@@ -89,6 +92,8 @@ def add_task(record_id: str, subject: str, due: str | None, owner: str | None, s
     }
     if due:
         item["Due_Date"] = due
+    if deal_name:
+        item["Deal_Name"] = deal_name
     if owner:
         item["Owner"] = {"email": owner}
 

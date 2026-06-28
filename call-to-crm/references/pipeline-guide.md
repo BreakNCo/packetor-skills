@@ -36,6 +36,32 @@ Audio file
 5. If `--deal-id` is provided, skip lookup entirely
 6. If a deal id came from an older note, chat message, or another workspace, do not trust it blindly — re-search the current Pipeline record before writing notes or tasks.
 
+### Exact deal id extraction in this environment
+
+When the visible search output does not clearly expose the top-level Pipeline/Deal `id`, extract it with:
+
+```bash
+mcporter --config /data/workspace-discord-ops/config/mcporter.json call zoho-bigin.Bigin_searchRecords \
+  'path_variables={"module_api_name":"Pipelines"}' \
+  'query_params={"word":"<company or deal name>"}' \
+| python3 -c 'import sys,json; obj=json.load(sys.stdin); print(obj["data"]["data"][0]["id"])'
+```
+
+Example used successfully for Orivios:
+
+```bash
+mcporter --config /data/workspace-discord-ops/config/mcporter.json call zoho-bigin.Bigin_searchRecords \
+  'path_variables={"module_api_name":"Pipelines"}' \
+  'query_params={"word":"Orivios Technologies Private Limited"}' \
+| python3 -c 'import sys,json; obj=json.load(sys.stdin); print(obj["data"]["data"][0]["id"])'
+```
+
+Output:
+
+```text
+1188539000000665129
+```
+
 ## Note Write Rule
 
 When writing a note to a Pipeline record through the local Zoho Bigin MCP path, use one of these two working patterns:

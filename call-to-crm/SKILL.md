@@ -133,6 +133,7 @@ The Python script should stop at transcript generation. After that, the agent sh
 3. decide account/deal matching strategy
 4. decide stage change only if clearly justified
 5. re-search and verify the current Pipeline/deal record before writing notes or tasks unless the deal id was just fetched in the same flow
+   - when the visible search output does not clearly expose the top-level deal id, use the exact extraction command documented in `references/pipeline-guide.md`
 6. add a note to the **Pipeline record only** unless explicitly instructed otherwise
    - for local Zoho Bigin MCP writes, use `Bigin_addNotesToSpecificRecord` with `body={"data":[{"Note_Title": ..., "Note_Content": ...}]}`
    - if that path is unavailable, use `Bigin_addNotes` with `Parent_Id=<deal_id>` and `se_module="Pipelines"`
