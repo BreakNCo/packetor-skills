@@ -42,8 +42,27 @@ Skills reference the following MCP servers:
 - **mcp-atlassian-azt** — Jira and Confluence
 - **context7** — Library and API documentation
 
+## Agent Skill Discovery
+
+Skills live at the repo root (`<skill-name>/SKILL.md`) and are symlinked into platform discovery folders:
+
+- **Claude Code** — `.claude/skills/`
+- **Cursor** — `.cursor/skills/`
+- **Codex / WARP** — `.agents/skills/`
+
+When working in this repo, Claude Code auto-loads skills from `.claude/skills/`. Trigger by task description (e.g. *transcribe this call*, *research Acme in Bigin*, *process call recording into CRM*) — the `description` field in each skill's YAML frontmatter drives matching.
+
+See [`.cursor/skills/README.md`](.cursor/skills/README.md) for the full skill index.
+
 ## Adding New Skills
 
-1. Create a new markdown file named `<tool>-<action>.md` (e.g. `apollo-prospect-search.md`)
-2. Follow the skill format above
-3. Update the skills table in `README.md`
+1. Create a skill folder at the repo root: `<skill-name>/SKILL.md` plus optional `config/`, `scripts/`, `references/` (see existing skills)
+2. Follow the skill format above (YAML frontmatter with `name` and `description` is required)
+3. Register for agent discovery (Claude Code, Cursor, Codex):
+   ```bash
+   for dir in .claude/skills .cursor/skills .agents/skills; do
+     mkdir -p "$dir"
+     ln -sf "../../<skill-name>" "${dir}/<skill-name>"
+   done
+   ```
+4. Update the skills table in `README.md` and `.cursor/skills/README.md`

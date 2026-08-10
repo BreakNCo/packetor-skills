@@ -1,3 +1,5 @@
 .env
 __pycache__/
 *.pyc
+
+bigin-research/scripts/apollo_results.db
