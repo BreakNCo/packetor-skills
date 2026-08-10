@@ -29,6 +29,9 @@ Packets is a compliance automation platform for fast-growing teams. This reposit
 | bigin-ops | [bigin-ops/](./bigin-ops/) | Day-to-day CRM operations — notes, tasks, meetings, pipeline stages, contacts, accounts |
 | audio-transcribe | [audio-transcribe/](./audio-transcribe/) | Convert audio/video files with ffmpeg and transcribe using OpenAI Whisper |
 | **call-to-crm** | [call-to-crm/](./call-to-crm/) | **End-to-end**: audio → ffmpeg → Whisper → GPT-4o summary → Bigin note + pipeline update + tasks |
+| marketing-email-send | [marketing-email-send/](./marketing-email-send/) | Send outbound marketing emails from Bigin using Notion templates and pre-uploaded attachments |
+
+Claude Code, Cursor, and Codex discover skills via symlinks in [`.claude/skills/`](./.claude/skills/), [`.cursor/skills/`](./.cursor/skills/), and [`.agents/skills/`](./.agents/skills/) — see [`.cursor/skills/README.md`](./.cursor/skills/README.md).
 
 ## Skill Structure
 
