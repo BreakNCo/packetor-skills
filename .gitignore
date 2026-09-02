@@ -1,5 +1,7 @@
 .env
 __pycache__/
 *.pyc
+blog-content-publish/cms-tools/node_modules/
+blog-content-publish/cms-tools/src/payload-types.ts
 
 bigin-research/scripts/apollo_results.db

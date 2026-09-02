@@ -17,6 +17,7 @@ Each platform discovers skills from its own folder; all entries are symlinks to 
 | [`bigin-research`](bigin-research/SKILL.md) | `bigin-company-research` | Web research + Bigin account enrichment (Firecrawl, GooseWorks, Apollo) |
 | [`call-to-crm`](call-to-crm/SKILL.md) | `call-to-crm` | End-to-end: audio → Whisper → GPT summary → Bigin note + pipeline + tasks |
 | [`marketing-email-send`](marketing-email-send/SKILL.md) | `marketing-email-send` | Outbound email from Bigin with Notion template + attachment selection |
+| [`blog-content-publish`](blog-content-publish/SKILL.md) | `blog-content-publish` | Keyword → SEO blog draft in Payload CMS (never publishes) — [setup](./blog-content-publish/README.md) |
 
 **Claude Code:** skills auto-load from `.claude/skills/` when you work in this repo. Trigger by describing the task (e.g. *process this call recording in Bigin*) or reference the skill name.
 

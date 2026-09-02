@@ -30,6 +30,7 @@ Packets is a compliance automation platform for fast-growing teams. This reposit
 | audio-transcribe | [audio-transcribe/](./audio-transcribe/) | Convert audio/video files with ffmpeg and transcribe using OpenAI Whisper |
 | **call-to-crm** | [call-to-crm/](./call-to-crm/) | **End-to-end**: audio → ffmpeg → Whisper → GPT-4o summary → Bigin note + pipeline update + tasks |
 | marketing-email-send | [marketing-email-send/](./marketing-email-send/) | Send outbound marketing emails from Bigin using Notion templates and pre-uploaded attachments |
+| blog-content-publish | [blog-content-publish/](./blog-content-publish/) ([README](./blog-content-publish/README.md)) | Research, write, SEO-score, optionally humanize, and save packets.build blog drafts to Payload |
 
 Claude Code, Cursor, and Codex discover skills via symlinks in [`.claude/skills/`](./.claude/skills/), [`.cursor/skills/`](./.cursor/skills/), and [`.agents/skills/`](./.agents/skills/) — see [`.cursor/skills/README.md`](./.cursor/skills/README.md).
 
@@ -42,6 +43,7 @@ Each skill follows the openclaw/senpi format:
 ├── SKILL.md          # Instructions + YAML frontmatter (triggers, workflow, error codes)
 ├── config/           # JSON config (thresholds, field names, defaults)
 ├── scripts/          # Python scripts executed by cron or agent
+├── cms-tools/        # (blog-content-publish) vendored Payload CLI; run bun install once
 └── references/       # Reference docs loaded into context as needed
 ```
 

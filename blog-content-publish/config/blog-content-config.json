@@ -1,0 +1,20 @@
+{
+  "skill": "blog-content-publish",
+  "version": "1.1.0",
+  "payloadBaseUrl": "https://packets.build",
+  "defaultAuthorSlug": "hello-packets",
+  "defaultReviewerSlug": "hello-packets",
+  "_eeatWarning": "hello-packets is placeholder/test content. Fine for drafts. Replace with a real named specialist Person doc before publishing anything this skill creates.",
+  "categoryKeywordMap": {
+    "soc-2-for-ai-companies": ["soc 2", "soc2", "trust services criteria", "type i", "type ii"],
+    "iso-27001-for-ai-companies": ["iso 27001", "isms", "annex a", "statement of applicability"],
+    "india-compliance": ["dpdp", "india compliance", "cert-in", "rbi"],
+    "ai-governance": ["iso 42001", "eu ai act", "ai governance", "model card", "ai risk management"]
+  },
+  "ctaPaths": ["/contact", "/early-access", "/audit-readiness"],
+  "internalLinkMin": 2,
+  "externalSourceMin": 2,
+  "targetSeoScore": 85,
+  "humanizerDefault": "llm",
+  "primaryComparisonCompetitor": "Scrut"
+}
