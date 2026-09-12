@@ -1,0 +1,27 @@
+{
+  "name": "packets-blog-cms-tools",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Vendored Payload CLI for blog-content-publish. Fork of packets-website CMS scripts — see SOURCE.md.",
+  "scripts": {
+    "cms:draft": "bun run scripts/create-draft-article.ts",
+    "cms:score": "bun run scripts/score-article.ts",
+    "cms:link-targets": "bun run scripts/list-link-targets.ts",
+    "test": "bun test src/lib/cms/html-to-lexical.test.ts"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "^3.88.0",
+    "@payloadcms/richtext-lexical": "^3.88.0",
+    "graphql": "^17.0.2",
+    "lexical": "^0.28.0",
+    "payload": "^3.88.0",
+    "react": "19",
+    "react-dom": "19",
+    "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "typescript": "^5.8.3"
+  }
+}
