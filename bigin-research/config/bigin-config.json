@@ -12,15 +12,14 @@
       "Industry",
       "Employees",
       "Phone",
-      "Twitter",
+      "Twitter_Url",
       "Billing_City",
       "Billing_State",
       "Billing_Country",
       "Company_Linkedin_Url",
       "Technologies",
       "Founded_Year",
-      "Funding_Info",
-      "ISO_Certifications"
+      "Total_Funding"
     ],
     "noteTitle": "Company Research Update"
   },

@@ -47,15 +47,16 @@ FIELD_MAP = {
     "industry":            "Industry",
     "employee_count":      "Employees",
     "phone":               "Phone",
-    "twitter_url":         "Twitter",
+    "twitter_url":         "Twitter_Url",
     "headquarters_city":   "Billing_City",
     "headquarters_state":  "Billing_State",
     "headquarters_country":"Billing_Country",
     "linkedin_url":        "Company_Linkedin_Url",
     "technologies":        "Technologies",
     "founded_year":        "Founded_Year",
-    "funding":             "Funding_Info",
-    "iso_certifications":  "ISO_Certifications",
+    "funding":             "Total_Funding",
+    # No free-text ISO field exists in Bigin: ISO_27001_Likelihood is a picklist
+    # (Already Has / Less Likely / Highly Likely / In Progress), so certifications go in the note instead.
 }
 
 

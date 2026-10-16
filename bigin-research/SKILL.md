@@ -40,7 +40,9 @@ GooseWorks is used **additively** — it fills gaps that Firecrawl misses (brand
 
 **Credit tracking:** Keep a running tally throughout the workflow. Each `gooseworks call` prints a `Cost: N credits` line — add those up. For Apollo, count the number of contacts successfully enriched in Phase 2 (each = 1 Apollo credit). Report both totals in the note's **Credits Used** section and as a final summary to the user after the run completes.
 
-**Credit budget:** Check balance before starting: `npx gooseworks credits`. The GooseWorks calls in this skill cost **~5–15 credits total per company** (not 100+). Never invoke full GooseWorks skills (e.g. `tech-stack-teardown`, `company-intel`) — use direct API calls only.
+**Credit budget:** Check balance before starting: `npx gooseworks credits`. The GooseWorks calls in this skill cost **~4–8 credits total per company** (not 100+). Never invoke full GooseWorks skills (e.g. `tech-stack-teardown`, `company-intel`) — use direct API calls only.
+
+**Apollo credit costs (measured, not the old "1 credit per contact"):** a contact whose phone is found costs **~9 Apollo credits** (1 email credit + ~8 direct-dial credits). A reveal that finds no phone costs roughly 1 credit. Budget **~27 credits per company** for the 3-phone goal and cap at **5 reveals per company**. Check the balance before and after a run with `python3 -I scripts/apollo_helper.py credits` (or `GET /api/v1/users/api_profile?include_credit_usage=true`; `num_credits_remaining` is the unified balance). Org search, people search and org enrichment are free.
 
 **Phone reveal webhook setup (one-time, required for contact phone numbers):**
 
@@ -110,8 +112,11 @@ The ngrok URL changes each time ngrok restarts (free tier). Update `~/.apollo_we
 ### Step 1 — Lookup in Bigin
 
 ```
-mcp__ZohoMCP__Bigin_searchRecords(module_api_name: "Accounts", word: "<company_name>")
+mcp__ZohoMCP__Bigin_searchRecords(module_api_name: "Accounts", criteria: "(Account_Name:starts_with:<company_name>)")
+mcp__ZohoMCP__Bigin_searchRecords(module_api_name: "Accounts", criteria: "(Account_Name:starts_with:<company_domain>)")
 ```
+
+> Do **not** rely on `word:` search — it matches whole words only and misses accounts stored as a domain (e.g. `zensible.com`). Check both the company name and the bare domain.
 
 - If found: note the account ID, existing website, and any already-populated fields
 - If not found: proceed with research, then create a new record at Step 3
@@ -183,6 +188,8 @@ gooseworks call fiber /v1/company-search --body='{"searchParams":{"company_names
 
 Returns: employee count, HQ city/country, industry, LinkedIn URL, funding stage. **~2–5 GooseWorks credits.**
 
+> **Unreliable — verify or skip.** Fiber matches by fuzzy company *name* and can return a different company entirely (a search for "Danaher" returned Google). Only use a result if its `domains` include the target company's domain; otherwise discard it. Prefer Apollo's free org search/enrich (Step 5a) for employee count, HQ and industry.
+
 Synthesise all findings from 2a–2g before moving to Step 3.
 
 ---
@@ -203,15 +210,15 @@ mcp__ZohoMCP__Bigin_updateSpecificRecord(
     "Industry": "...",
     "Employees": 0,
     "Phone": "...",
-    "Twitter": "...",
+    "Twitter_Url": "...",
     "Billing_City": "...",
     "Billing_State": "...",
     "Billing_Country": "...",
     "Company_Linkedin_Url": "...",
     "Technologies": "...",
     "Founded_Year": "...",
-    "Funding_Info": "...",
-    "ISO_Certifications": "..."
+    "Total_Funding": "...",
+    "Tag": [{ "name": "<batch tag, if the user asked for one>" }]
   }
 )
 ```
@@ -220,9 +227,17 @@ mcp__ZohoMCP__Bigin_updateSpecificRecord(
 ```
 mcp__ZohoMCP__Bigin_addRecords(
   module_api_name: "Accounts",
-  data: [{ "Account_Name": "...", "Website": "...", "Description": "...", "Industry": "...", "Account_Type": "Prospect" }]
+  data: [{ "Account_Name": "...", "Website": "...", "Description": "...", "Industry": "...", "Tag": [{ "name": "<batch tag>" }] }]
 )
 ```
+
+**Bigin Accounts field notes (verified against this org's field metadata):**
+- Tool shapes: `updateSpecificRecord` takes `data` as an **array** with one object; `addRecords`/`updateSpecificRecord` take `path_variables` + `body`.
+- There is **no** `Twitter`, `Funding_Info` or `ISO_Certifications` field. Use `Twitter_Url`, `Total_Funding`, and the picklist `ISO_27001_Likelihood` (`Already Has` / `Less Likely` / `Highly Likely` / `In Progress`) — set it only when there is evidence (e.g. a published ISO 27001 certificate), otherwise leave it unset.
+- `Industry` is a restricted picklist with unrelated default values (e.g. `Large Enterprise`, `Small/Medium Enterprise`, `Service Provider`, `IT Product`). Use `Large Enterprise` for >1,000 employees, else `Small/Medium Enterprise`, and put the real industry in `Description` and the note.
+- `Employees` and `Founded_Year` are integers. `Technologies` is limited to 255 characters — only write it from a reliable source (Apollo's tech list is an unfiltered dump; do not use it).
+- When sources conflict (e.g. founded year, employee count) pick one, and mention the conflict in the note; leave the field blank if you cannot tell.
+- **Creating an Account automatically creates a Customer Acquisition lead** — see Step 5f.
 
 ---
 
@@ -328,14 +343,26 @@ mcp__ZohoMCP__Bigin_addNotes(
 
 ### Credits Used
 - **GooseWorks credits:** <total GooseWorks credits consumed this run — sum of brand-dev call + fiber call + people/match calls (email+phone reveal), reported from `Cost: N credits` output of each gooseworks call>
-- **Apollo credits:** <total Apollo credits consumed — number of contacts enriched in Phase 2, since each enrichment costs 1 Apollo credit>
+- **Apollo credits:** <reveals fired × ~9 (1 email + ~8 direct dial per phone found); state reveals fired and phones obtained>
 ```
 
 ---
 
 ## Step 5 — Apollo Contact Finder (runs every time, fully automatic)
 
-Apollo API key is passed by the user as an argument (e.g. `APOLLO_API_KEY=xxx`) or read from `~/.env`.
+Apollo API key is passed by the user as an argument (e.g. `APOLLO_API_KEY=xxx`), or read from `APOLLO_API_KEY` in the environment, `~/.env`, or the repo's `.env`. Never print or echo the key.
+
+**Preferred: use the helper** `scripts/apollo_helper.py` (reads the key itself, uses the correct headers/parameters, never prints the key):
+
+```bash
+python3 -I scripts/apollo_helper.py org <domain>            # org profile (search + free enrich)
+python3 -I scripts/apollo_helper.py people <org_id>         # tiered candidates, India-first (add --global)
+python3 -I scripts/apollo_helper.py reveal <person_id>      # phone reveal + full identity (name/title/email)
+python3 -I scripts/apollo_helper.py poll <id> [<id>...] --timeout 240
+python3 -I scripts/apollo_helper.py credits
+```
+
+The raw `curl` forms below remain valid for reference.
 
 **All Apollo API calls must use the `X-Api-Key` header — NOT `api_key` in the request body.** The body-key form returns `INVALID_API_KEY_LOCATION` and zero results without an error status code, making it a silent failure.
 
@@ -360,8 +387,12 @@ curl -s -X POST "https://api.apollo.io/api/v1/mixed_companies/search" \
   -H "Content-Type: application/json" \
   -H "Cache-Control: no-cache" \
   -H "X-Api-Key: $APOLLO_API_KEY" \
-  -d '{"q_organization_domains": ["<company_domain>"], "per_page": 1}'
+  -d '{"q_organization_domains": "<company_domain>", "per_page": 1}'
 ```
+
+> **Pass the domain as a plain string, not a list.** `"q_organization_domains": ["x.com"]` returns zero results (silently, HTTP 200) for companies that exist; the string form works. Confirm the returned `primary_domain` matches what you searched — a guessed domain can resolve to a *different* company (e.g. `airtelbank.com` resolved to Bharti Airtel, not Airtel Payments Bank).
+>
+> For richer data (employee count, industry, HQ, funding) call the **free** enrich endpoint: `GET https://api.apollo.io/api/v1/organizations/enrich?domain=<company_domain>` (same `X-Api-Key` header).
 
 If domain search returns no org, **inform the user** that the company was not found in Apollo's search index and ask them to provide the Apollo org URL directly from `app.apollo.io`. Do not attempt name-based search as a fallback — it is equally unreliable for small companies.
 
@@ -388,11 +419,13 @@ curl -s -X POST "https://api.apollo.io/api/v1/mixed_people/api_search" \
 
 The response contains person objects with `id` and `title` but **names and emails are masked**. Collect all person IDs.
 
-> **Critical — confirm identity before enrichment:** `mixed_people/api_search` returns masked names, so **never assume name-to-ID mapping by position or order**. For each person ID, call `people/match` once WITHOUT `reveal_phone_number` to confirm the real name, title, and email before firing the paid phone reveal. Store the confirmed `{id, name, title, email}` mapping and use it throughout — including when storing webhook results and writing to Bigin. This prevents phones being assigned to the wrong contact, which happened when IDs were assumed to map to names in a certain order but Apollo returned them differently.
+> **Identity comes from the reveal response — do not run a separate identity check.** `mixed_people/api_search` returns masked names, so never assume name-to-ID mapping by position. The `people/match` call that reveals the phone (Step 5c) also returns the real `name`, `title` and `email` for that exact person ID, and the webhook result is keyed by the same ID. Store `{id, name, title, email}` from that response and use it when writing to Bigin. A separate `people/match` "identity check" is **not free** (≈1 Apollo email credit per call, and the reveal charges the email credit again), so it only adds cost.
+
+**For large companies, filter the search.** An unfiltered `mixed_people/api_search` on a big org returns arbitrary staff (e.g. talent-acquisition directors). Add `person_titles` (with `"include_similar_titles": true`) for compliance/security/legal/secretarial/C-suite roles, and prefer `person_locations: ["India"]` first when the target is Indian (fall back to global if fewer than 3 results). `scripts/apollo_helper.py people` does this.
 
 #### Contact Priority Order
 
-After confirming identities (free `people/match` without reveal), sort all contacts by priority tier before deciding which to enrich:
+Sort the candidates by priority tier (from their titles in the search results) before deciding which to enrich:
 
 | Priority | Roles |
 |---|---|
@@ -415,9 +448,11 @@ After confirming identities (free `people/match` without reveal), sort all conta
 
 **Key rule:** Never enrich all contacts upfront if there are more than 3. Always start with 3, check results, then continue only if needed. This keeps Apollo credit spend proportional to the result.
 
+**Hard cap: 5 reveals per company.** Stop at 5 even if fewer than 3 phones were found. Skip implausible candidates (e.g. a "Founder" of a large subsidiary) in favour of compliance/security/legal/IT titles when the goal is ISO/compliance outreach.
+
 ### Step 5c — Enrich Each Contact via people/match
 
-For each contact in the current enrichment batch (up to 3 per round), call `/api/v1/people/match` to reveal name, email, and phone. This is where Apollo credits are consumed (1 credit per call).
+For each contact in the current enrichment batch (up to 3 per round), call `/api/v1/people/match` to reveal name, email, and phone. This is where Apollo credits are consumed (≈1 email credit + ≈8 direct-dial credits when a phone is found, ≈9 per contact; much less when no phone exists).
 
 > **Critical:** `reveal_phone_number`, `run_waterfall_phone`, and `webhook_url` MUST be **query parameters** in the URL — NOT in the request body. Putting them in the body is silently ignored: Apollo returns person data but never fires the webhook callback. This was confirmed by Apollo's official docs and live testing.
 
@@ -443,7 +478,7 @@ If `waterfall.status` is `"failed"`, Apollo has no phone data for that contact (
 
 The sync response returns `name`, `email`, `email_status`, `linkedin_url`, `city`, `state`, `country`, `seniority`, `departments`. **Phone numbers arrive asynchronously** — Apollo fires a POST to the webhook URL after it completes the reveal (can take 30–120s per contact).
 
-**Run enrichment sequentially** — one contact at a time. Each call costs 1 Apollo credit.
+**Run enrichment sequentially** — one contact at a time. Budget ≈9 Apollo credits per contact whose phone is found.
 
 ### Step 5d — Poll for Phone Results (blocking, do not skip, MUST run before contact insertion)
 
@@ -529,11 +564,11 @@ mcp__ZohoMCP__Bigin_updateSpecificRecord(
 )
 ```
 
-Run this for every contact where a phone was returned. Then update the research note's Key Contacts section to reflect the phone numbers received (delete old note + re-add with updated content, since `updateNotes` is broken — see Step 4).
+Run this for every contact where a phone was returned. **Webhook phone entries carry no `type` label.** Classify them: an Indian number matching `+91[6-9]xxxxxxxxx` is a mobile → `Mobile`; anything else (landlines such as `+91 80…`/`+91 22…`, foreign prefixes) → `Corporate_Phone`. Treat a country code that doesn't match the contact's country (e.g. a +55 or +44 number for an Indian employee) as suspect: store it in `Corporate_Phone` only and flag it in the note. Then update the research note's Key Contacts section to reflect the phone numbers received (delete old note + re-add with updated content, since `updateNotes` is broken — see Step 4).
 
 ### Step 5f — Link Pipeline Record to Best Contact (mandatory, always run)
 
-After contacts are inserted/updated, find the company's Pipeline record and set `Contact_Name` to the best available contact. This eliminates the manual linking step.
+**Bigin automatically creates a Customer Acquisition lead** (Pipeline `Customer Acquisition`, Stage `Lead`, Deal_Name = the account name, no contact) a few seconds after an Account is created. **Never create a pipeline record yourself** — find that lead and update it with the best available contact (and the batch tag, if any). Creating one manually produces a duplicate.
 
 **Priority order for best contact** (pick the highest available):
 1. CEO, Co-founder, Founder, Managing Director
@@ -542,11 +577,14 @@ After contacts are inserted/updated, find the company's Pipeline record and set 
 4. Any other contact (pick the one with the most complete data — email + phone preferred)
 
 ```
-# 1. Find the pipeline record
+# 1. Find the pipeline record (auto-created lead)
 mcp__ZohoMCP__Bigin_searchRecords(
   module_api_name: "Pipelines",
-  word: "<company_name_keyword>"
+  criteria: "(Deal_Name:starts_with:<Account_Name>)"
 )
+# Search-index lag: the lead can take 60–120s to become searchable. Retry every 30s for up to 4 minutes.
+# Fallback: mcp__ZohoMCP__Bigin_getRecords(module_api_name: "Pipelines", fields: "Deal_Name,Account_Name,Stage,Contact_Name,Tag",
+#   sort_by: "Created_Time", sort_order: "desc", per_page: 40) and match on Account_Name.id.
 
 # 2. Update it with the best contact's Bigin ID
 mcp__ZohoMCP__Bigin_updateSpecificRecord(
@@ -556,7 +594,8 @@ mcp__ZohoMCP__Bigin_updateSpecificRecord(
     "Deal_Name": "<pipeline_deal_name>",
     "Stage": "<current_stage>",
     "Sub_Pipeline": "<current_sub_pipeline>",
-    "Contact_Name": { "id": "<best_contact_bigin_id>", "name": "<contact_full_name>" }
+    "Contact_Name": { "id": "<best_contact_bigin_id>", "name": "<contact_full_name>" },
+    "Tag": [{ "name": "<batch tag, if requested>" }]
   }]
 )
 ```
@@ -565,6 +604,9 @@ mcp__ZohoMCP__Bigin_updateSpecificRecord(
 - `Deal_Name`, `Stage`, and `Sub_Pipeline` are required fields — always carry them forward from the existing record, never blank them.
 - If no contacts exist for the company (Apollo returned 0 results), skip this step and note it in the research note.
 - If there are multiple contacts at the same priority tier, prefer the one with a confirmed email over one without.
+- For the auto-created lead the values are `Stage: "Lead"`, `Sub_Pipeline: "Customer Acquisition Standard"` (pipeline id `1188539000000432125`). The other pipeline is `Companies Direct` (stages incl. `Sequence Active`, `Call Due`; Sub_Pipeline `Companies Direct Standard`).
+- Only if no auto-created lead exists after the full retry window, report it to the user rather than creating one.
+- Re-check before finishing: the lead has `Contact_Name` set and carries the requested tag. Never delete records yourself — report any duplicate leads to the user.
 
 ### Step 5g — Insert Apollo Contacts into Bigin
 
@@ -624,15 +666,15 @@ See `references/field-mapping.md` for the full scraped-key → Bigin API field m
 | `Industry` | Firecrawl, supplemented by brand-dev `industry` or fiber `industry` |
 | `Employees` | Firecrawl, supplemented by brand-dev `employeeRange` or fiber `employeeCount` |
 | `Phone` | Main contact number (Firecrawl) |
-| `Twitter` | Twitter/X URL (Firecrawl or brand-dev `twitter`) |
+| `Twitter_Url` | Twitter/X URL (Firecrawl, Apollo `twitter_url`, or brand-dev `twitter`) |
 | `Billing_City` | HQ city (Firecrawl or fiber `hqCity`) |
 | `Billing_State` | HQ state/region |
 | `Billing_Country` | HQ country |
 | `Company_Linkedin_Url` | LinkedIn URL (Firecrawl or fiber `linkedinUrl`) |
 | `Technologies` | Comma-separated tech stack (Firecrawl) |
 | `Founded_Year` | 4-digit year (Firecrawl or brand-dev `foundedYear`) |
-| `Funding_Info` | e.g. "Series B, $20M (2024)" (Firecrawl) |
-| `ISO_Certifications` | e.g. "ISO 27001, SOC 2" (Firecrawl) |
+| `Total_Funding` | e.g. "Series B, $20M (2024)" (Firecrawl) |
+| `ISO_27001_Likelihood` | Picklist (`Already Has`/`Less Likely`/`Highly Likely`/`In Progress`) — only with evidence; certifications text goes in the note |
 
 **Contact fields (from Apollo Phase 2 → Bigin Contacts module):**
 
@@ -670,10 +712,10 @@ See `references/field-mapping.md` for the full scraped-key → Bigin API field m
 | Brand/industry lookup | `gooseworks call brand-dev /v1/brand/retrieve` | ~1–2 credits | Every run |
 | Employee/HQ lookup | `gooseworks call fiber /v1/company-search` (pageSize: 1) | ~2–5 credits | Every run |
 | Apollo contact search | `apollo-lead-finder` Phase 1 | **Free** | Every run |
-| Apollo contact enrich | `apollo-lead-finder` Phase 2 | 1 Apollo credit/contact | Every run, automatic |
-| Apollo email + phone reveal | `curl` direct to `https://api.apollo.io/api/v1/people/match` | **0 GooseWorks credits** (direct Apollo API, uses Apollo credits) | Every run, per contact from Phase 1 |
+| Apollo org search + enrich | `organizations/enrich`, `mixed_companies/search` | **Free** | Every run |
+| Apollo email + phone reveal | `scripts/apollo_helper.py reveal` (`people/match` with reveal params) | **0 GooseWorks credits**; **~9 Apollo credits per contact with a phone** (1 email + ~8 direct dial), ~1 if no phone | Up to 3 per company, hard cap 5 |
 
-**Target: ≤15 GooseWorks credits per company research run.**
+**Target: ≤15 GooseWorks credits per company research run** (measured ≈4–8, mostly the brand-dev lookup; avoid calling it twice).
 
 Never invoke full GooseWorks skills like `tech-stack-teardown` or `company-intel` as part of this workflow — those invoke Apify actors internally and can cost 50–100+ credits per run.
 
@@ -706,6 +748,16 @@ Common codes:
 - `GOOSEWORKS_INSUFFICIENT_CREDITS` — check balance with `npx gooseworks credits`
 
 ---
+
+## Known Pitfalls (from batch runs)
+
+- **Firecrawl unavailable / blocked** (e.g. a corporate proxy returns HTTP 403 for `api.firecrawl.dev`): the run can proceed with GooseWorks + Apollo only. Write "Not found - web scraping skipped" for technology stack and any website-only fields, and say so under Data Sources. A built-in web fetch of the company site is an acceptable stand-in for description/ISO certifications, but many corporate sites return 403 to it too — never guess.
+- **Check the webhook before spending credits:** `curl -s "$(cat ~/.apollo_webhook_url)/"` must return `{"status":"ok"}`. The ngrok free URL changes on every restart.
+- **Domain guesses can hit the wrong company** — verify `primary_domain`/`name` from Apollo before writing anything (see Step 5a).
+- **Duplicates:** an Account creates its own lead (Step 5f). Search by `criteria` (name and domain), not `word`. The search index lags 60–120s behind writes, so a "not found" right after creating a record does not mean it does not exist.
+- **Bigin schema differences:** `Twitter_Url`, `Total_Funding`, `ISO_27001_Likelihood`; no `ISO_Certifications` field; restricted `Industry` picklist (Step 3 notes).
+- **Contacts:** the tool schema lists only some fields but the Bigin API stores the extra ones (`Seniority`, `Departments`, `Email_Confidence`, `Corporate_Phone`, `Person_Linkedin_Url`, …) — verified by reading a contact back.
+- **Parallel runs:** several companies can be processed by parallel agents safely (the webhook and Apollo rate limits handle it); give each agent the full recipe and the hard reveal cap, and tell them never to create pipeline records.
 
 ## Cron Usage
 
